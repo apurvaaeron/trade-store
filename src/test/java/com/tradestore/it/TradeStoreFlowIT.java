@@ -103,6 +103,23 @@ class TradeStoreFlowIT {
     }
 
     @Test
+    void restRejectsUnsafeIdentifiersWith400() {
+        for (Map<String, Object> body : List.of(
+                Map.<String, Object>of("tradeId", "R\n4", "version", 1, "counterPartyId", "CP-1", "bookId", "B1",
+                        "maturityDate", "20/05/2030"),
+                Map.<String, Object>of("tradeId", "R5", "version", 1, "counterPartyId", "CP/1", "bookId", "B1",
+                        "maturityDate", "20/05/2030"),
+                Map.<String, Object>of("tradeId", "R6", "version", 1, "counterPartyId", "CP-1", "bookId", "B".repeat(65),
+                        "maturityDate", "20/05/2030"))) {
+            ResponseEntity<JsonNode> response = rest.postForEntity("/api/v1/trades", body, JsonNode.class);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getBody().get("reason").asText()).isEqualTo("INVALID_PAYLOAD");
+        }
+        assertThat(tradeRepository.findById("R5")).isEmpty();
+    }
+
+    @Test
     void kafkaStoresTradesAndPublishesRejections() throws Exception {
         try (Consumer<String, String> rejected = rejectedTopicConsumer()) {
             publisher.publish(request("K1", 2, today.plusDays(5))).get();

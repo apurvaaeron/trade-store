@@ -18,11 +18,15 @@ import com.tradestore.domain.LowerVersionException;
 import com.tradestore.domain.RejectionReason;
 import com.tradestore.domain.Trade;
 import com.tradestore.domain.TradeRequest;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.validation.Validation;
 import jakarta.validation.ValidatorFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 class TradeIngestionServiceTest {
 
@@ -80,5 +84,24 @@ class TradeIngestionServiceTest {
 
         verify(storeService, never()).store(any());
         verify(auditService).rejected(eq(request), eq(Channel.REST), any(InvalidTradeException.class));
+    }
+
+    @Test
+    void sanitizesLineBreaksFromRejectedTradeLogs() {
+        TradeRequest request = new TradeRequest("T1\r\nforged", 1, "CP-1", "B1", TODAY, null);
+        Logger logger = (Logger) LoggerFactory.getLogger(TradeIngestionService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
+        try {
+            assertThatThrownBy(() -> service.ingest(request, Channel.REST)).isInstanceOf(InvalidTradeException.class);
+
+            assertThat(appender.list).hasSize(1);
+            assertThat(appender.list.get(0).getFormattedMessage()).doesNotContain("\r", "\n");
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
     }
 }

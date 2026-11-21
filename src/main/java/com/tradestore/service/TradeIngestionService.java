@@ -49,9 +49,14 @@ public class TradeIngestionService {
             auditService.rejected(request, channel, e);
             meterRegistry.counter(METRIC, "channel", channel.name(), "outcome", "rejected", "reason",
                     e.getReason().name()).increment();
-            log.warn("Trade {} rejected via {}: {}", e.getTradeId(), channel, e.getMessage());
+            log.warn("Trade {} rejected via {}: {}", sanitizeForLog(e.getTradeId()), channel,
+                    sanitizeForLog(e.getMessage()));
             throw e;
         }
+    }
+
+    private static String sanitizeForLog(String value) {
+        return value == null ? "null" : value.replace('\r', ' ').replace('\n', ' ');
     }
 
     private void checkPayload(TradeRequest request) {

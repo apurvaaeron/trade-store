@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.UriComponentsBuilder;
 
 @RestController
 @RequestMapping("/api/v1/trades")
@@ -43,7 +44,12 @@ public class TradeController {
     @PostMapping
     public ResponseEntity<TradeResponse> store(@RequestBody TradeRequest request) {
         TradeResponse stored = TradeResponse.from(ingestionService.ingest(request, Channel.REST));
-        return ResponseEntity.created(URI.create("/api/v1/trades/" + stored.tradeId())).body(stored);
+        URI location = UriComponentsBuilder.fromPath("/api/v1/trades")
+                .pathSegment(stored.tradeId())
+                .build()
+                .encode()
+                .toUri();
+        return ResponseEntity.created(location).body(stored);
     }
 
     /** Asynchronous ingestion through Kafka; rejections appear on the rejected-trades topic and in the audit. */

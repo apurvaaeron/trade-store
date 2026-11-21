@@ -68,6 +68,16 @@ class TradeControllerTest {
     }
 
     @Test
+    void encodesTradeIdAsOneLocationPathSegment() throws Exception {
+        Trade slashId = new Trade("T/1", 1, "CP-1", "B1", LocalDate.of(2030, 5, 20), TODAY, false);
+        when(ingestionService.ingest(any(TradeRequest.class), eq(Channel.REST))).thenReturn(slashId);
+
+        mvc.perform(post("/api/v1/trades").contentType(MediaType.APPLICATION_JSON).content(BODY))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Location", "/api/v1/trades/T%2F1"));
+    }
+
+    @Test
     void lowerVersionReturns422WithReason() throws Exception {
         when(ingestionService.ingest(any(), any())).thenThrow(new LowerVersionException("T1", 1, 2));
 
