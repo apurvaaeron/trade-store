@@ -86,7 +86,6 @@ jobs:
           scan-ref: .
           scanners: vuln
           severity: CRITICAL
-          ignore-unfixed: true
           exit-code: '1'
           format: table
       - name: Restore NVD database cache
@@ -114,7 +113,7 @@ jobs:
 
   docker-image:
     name: Container image (build, scan, push on main)
-    needs: [build-and-test, oss-vulnerability-scan]
+    needs: [build-and-test, mutation-tests, oss-vulnerability-scan]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -133,7 +132,6 @@ jobs:
         with:
           image-ref: ${{ env.IMAGE }}:${{ github.sha }}
           severity: CRITICAL
-          ignore-unfixed: true
           exit-code: '1'
       - name: Push to GitHub Container Registry
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
