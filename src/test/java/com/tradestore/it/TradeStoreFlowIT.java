@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -55,6 +56,8 @@ class TradeStoreFlowIT {
     private KafkaContainer kafkaContainer;
 
     private final LocalDate today = LocalDate.now(ZoneOffset.UTC);
+    private static final List<String> INVALID_CREATED_DATES = List.of(
+            "01/01/0000", "01/01/-0001", "01/01/+10000", "01/01/10000", "1/1/0001");
 
     @BeforeEach
     void clean() {
@@ -209,6 +212,65 @@ class TradeStoreFlowIT {
     }
 
     @Test
+    void restRejectsCreatedDatesOutsideFourDigitAdYearsWithoutPersisting() {
+        for (int i = 0; i < INVALID_CREATED_DATES.size(); i++) {
+            String id = "YR-R" + i;
+            Map<String, Object> payload = Map.of("tradeId", id, "version", 1, "counterPartyId", "CP-1",
+                    "bookId", "B1", "maturityDate", wireDate(today.plusDays(5)),
+                    "createdDate", INVALID_CREATED_DATES.get(i));
+
+            ResponseEntity<JsonNode> response = rest.postForEntity("/api/v1/trades", payload, JsonNode.class);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(tradeRepository.findById(id)).isEmpty();
+            assertThat(auditRepository.findByTradeIdOrderByReceivedAtAsc(id)).isEmpty();
+        }
+    }
+
+    @Test
+    void restAcceptsCreatedDateYearBoundariesWithoutChangingWireValue() {
+        List<String> boundaryDates = List.of("01/01/0001", "31/12/9999");
+        for (int i = 0; i < boundaryDates.size(); i++) {
+            String id = "YR-B" + i;
+            String createdDate = boundaryDates.get(i);
+            Map<String, Object> payload = Map.of("tradeId", id, "version", 1, "counterPartyId", "CP-1",
+                    "bookId", "B1", "maturityDate", wireDate(today.plusDays(5)), "createdDate", createdDate);
+
+            ResponseEntity<JsonNode> response = rest.postForEntity("/api/v1/trades", payload, JsonNode.class);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+            assertThat(response.getBody().get("createdDate").asText()).isEqualTo(createdDate);
+            assertThat(tradeRepository.findById(id)).isPresent();
+        }
+    }
+
+    @Test
+    void kafkaSendsCreatedDatesOutsideFourDigitAdYearsToDeadLetterWithoutPersisting() throws Exception {
+        List<String> expectedDeadLetters = new ArrayList<>();
+        List<String> ids = new ArrayList<>();
+        try (Consumer<String, byte[]> deadLetter = deadLetterConsumer()) {
+            for (int i = 0; i < INVALID_CREATED_DATES.size(); i++) {
+                String id = "YR-K" + i;
+                ids.add(id);
+                Map<String, Object> payload = Map.of("tradeId", id, "version", 1, "counterPartyId", "CP-1",
+                        "bookId", "B1", "maturityDate", wireDate(today.plusDays(5)),
+                        "createdDate", INVALID_CREATED_DATES.get(i));
+                byte[] original = objectMapper.writeValueAsBytes(payload);
+                expectedDeadLetters.add(new String(original, StandardCharsets.UTF_8));
+                kafkaTemplate.send("trades.inbound", id, original).get();
+            }
+
+            assertThat(pollDeadLetters(deadLetter, expectedDeadLetters.size()))
+                    .extracting(bytes -> new String(bytes, StandardCharsets.UTF_8))
+                    .containsExactlyInAnyOrderElementsOf(expectedDeadLetters);
+        }
+        for (String id : ids) {
+            assertThat(tradeRepository.findById(id)).isEmpty();
+            assertThat(auditRepository.findByTradeIdOrderByReceivedAtAsc(id)).isEmpty();
+        }
+    }
+
+    @Test
     void expiryRunMarksMaturedTradesAsExpired() {
         rest.postForEntity("/api/v1/trades", body("E1", 1, today.plusDays(1)), JsonNode.class);
         rest.postForEntity("/api/v1/trades", body("E2", 1, today.plusDays(10)), JsonNode.class);
@@ -293,5 +355,9 @@ class TradeStoreFlowIT {
     private static Map<String, Object> body(String id, int version, LocalDate maturity) {
         return Map.of("tradeId", id, "version", version, "counterPartyId", "CP-1", "bookId", "B1",
                 "maturityDate", "%02d/%02d/%d".formatted(maturity.getDayOfMonth(), maturity.getMonthValue(), maturity.getYear()));
+    }
+
+    private static String wireDate(LocalDate date) {
+        return "%02d/%02d/%04d".formatted(date.getDayOfMonth(), date.getMonthValue(), date.getYear());
     }
 }
