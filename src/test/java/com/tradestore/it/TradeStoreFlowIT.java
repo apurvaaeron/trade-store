@@ -158,6 +158,19 @@ class TradeStoreFlowIT {
     }
 
     @Test
+    void fractionalKafkaVersionGoesToDeadLetterWithoutAudit() throws Exception {
+        byte[] original = """
+                {"tradeId":"V1","version":2.9,"counterPartyId":"CP-1","bookId":"B1","maturityDate":"20/05/2030"}
+                """.getBytes(StandardCharsets.UTF_8);
+        try (Consumer<String, byte[]> deadLetter = deadLetterConsumer()) {
+            kafkaTemplate.send("trades.inbound", "V1", original).get();
+            assertThat(pollDeadLetter(deadLetter)).containsExactly(original);
+        }
+        assertThat(tradeRepository.findById("V1")).isEmpty();
+        assertThat(auditRepository.findByTradeIdOrderByReceivedAtAsc("V1")).isEmpty();
+    }
+
+    @Test
     void expiryRunMarksMaturedTradesAsExpired() {
         rest.postForEntity("/api/v1/trades", body("E1", 1, today.plusDays(1)), JsonNode.class);
         rest.postForEntity("/api/v1/trades", body("E2", 1, today.plusDays(10)), JsonNode.class);

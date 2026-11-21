@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import java.time.LocalDate;
+import tools.jackson.databind.annotation.JsonDeserialize;
 
 /**
  * Inbound trade as received on any channel (REST or Kafka). Dates use the dd/MM/yyyy format of the brief.
@@ -13,7 +14,7 @@ import java.time.LocalDate;
  */
 public record TradeRequest(
         @NotBlank @Pattern(regexp = "[A-Za-z0-9._-]{1,64}") String tradeId,
-        @NotNull @Positive Integer version,
+        @NotNull @Positive @JsonDeserialize(using = StrictIntegerDeserializer.class) Integer version,
         @NotBlank @Pattern(regexp = "[A-Za-z0-9._-]{1,64}") String counterPartyId,
         @NotBlank @Pattern(regexp = "[A-Za-z0-9._-]{1,64}") String bookId,
         @NotNull @JsonFormat(pattern = "dd/MM/yyyy") LocalDate maturityDate,

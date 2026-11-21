@@ -115,6 +115,13 @@ class TradeControllerTest {
     }
 
     @Test
+    void fractionalVersionReturns400() throws Exception {
+        mvc.perform(post("/api/v1/trades").contentType(MediaType.APPLICATION_JSON)
+                        .content(BODY.replace("\"version\":1", "\"version\":2.9")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void asyncPublishReturns202() throws Exception {
         when(publisher.publish(any())).thenReturn(CompletableFuture.completedFuture(null));
 
