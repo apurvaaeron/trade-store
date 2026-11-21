@@ -171,6 +171,44 @@ class TradeStoreFlowIT {
     }
 
     @Test
+    void invalidCalendarDatesGoToDeadLetterWithoutAudit() throws Exception {
+        byte[] invalidMaturity = """
+                {"tradeId":"DM1","version":1,"counterPartyId":"CP-1","bookId":"B1","maturityDate":"31/02/2030"}
+                """.getBytes(StandardCharsets.UTF_8);
+        byte[] invalidCreated = """
+                {"tradeId":"DM2","version":1,"counterPartyId":"CP-1","bookId":"B1","maturityDate":"20/05/2030","createdDate":"31/02/2030"}
+                """.getBytes(StandardCharsets.UTF_8);
+        try (Consumer<String, byte[]> deadLetter = deadLetterConsumer()) {
+            kafkaTemplate.send("trades.inbound", "DM1", invalidMaturity).get();
+            kafkaTemplate.send("trades.inbound", "DM2", invalidCreated).get();
+
+            assertThat(pollDeadLetters(deadLetter, 2))
+                    .extracting(bytes -> new String(bytes, StandardCharsets.UTF_8))
+                    .containsExactlyInAnyOrder(new String(invalidMaturity, StandardCharsets.UTF_8),
+                            new String(invalidCreated, StandardCharsets.UTF_8));
+        }
+        assertThat(tradeRepository.findById("DM1")).isEmpty();
+        assertThat(tradeRepository.findById("DM2")).isEmpty();
+        assertThat(auditRepository.findByTradeIdOrderByReceivedAtAsc("DM1")).isEmpty();
+        assertThat(auditRepository.findByTradeIdOrderByReceivedAtAsc("DM2")).isEmpty();
+    }
+
+    @Test
+    void restRejectsInvalidCalendarDatesWithoutAudit() {
+        Map<String, Object> invalidMaturity = Map.of("tradeId", "DR1", "version", 1, "counterPartyId", "CP-1",
+                "bookId", "B1", "maturityDate", "31/02/2030");
+        Map<String, Object> invalidCreated = Map.of("tradeId", "DR2", "version", 1, "counterPartyId", "CP-1",
+                "bookId", "B1", "maturityDate", "20/05/2030", "createdDate", "31/02/2030");
+
+        assertThat(rest.postForEntity("/api/v1/trades", invalidMaturity, JsonNode.class).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(rest.postForEntity("/api/v1/trades", invalidCreated, JsonNode.class).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(auditRepository.findByTradeIdOrderByReceivedAtAsc("DR1")).isEmpty();
+        assertThat(auditRepository.findByTradeIdOrderByReceivedAtAsc("DR2")).isEmpty();
+    }
+
+    @Test
     void expiryRunMarksMaturedTradesAsExpired() {
         rest.postForEntity("/api/v1/trades", body("E1", 1, today.plusDays(1)), JsonNode.class);
         rest.postForEntity("/api/v1/trades", body("E2", 1, today.plusDays(10)), JsonNode.class);
@@ -231,11 +269,19 @@ class TradeStoreFlowIT {
     }
 
     private byte[] pollDeadLetter(Consumer<String, byte[]> consumer) {
+        return pollDeadLetters(consumer, 1).get(0);
+    }
+
+    private List<byte[]> pollDeadLetters(Consumer<String, byte[]> consumer, int expected) {
+        List<byte[]> received = new java.util.ArrayList<>();
         long deadline = System.currentTimeMillis() + 30_000;
-        while (System.currentTimeMillis() < deadline) {
+        while (received.size() < expected && System.currentTimeMillis() < deadline) {
             for (ConsumerRecord<String, byte[]> record : consumer.poll(Duration.ofMillis(500))) {
-                return record.value();
+                received.add(record.value());
             }
+        }
+        if (received.size() == expected) {
+            return received;
         }
         throw new AssertionError("No dead-letter record received");
     }

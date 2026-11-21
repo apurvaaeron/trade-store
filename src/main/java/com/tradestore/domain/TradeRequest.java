@@ -17,6 +17,8 @@ public record TradeRequest(
         @NotNull @Positive @JsonDeserialize(using = StrictIntegerDeserializer.class) Integer version,
         @NotBlank @Pattern(regexp = "[A-Za-z0-9._-]{1,64}") String counterPartyId,
         @NotBlank @Pattern(regexp = "[A-Za-z0-9._-]{1,64}") String bookId,
-        @NotNull @JsonFormat(pattern = "dd/MM/yyyy") LocalDate maturityDate,
-        @JsonFormat(pattern = "dd/MM/yyyy") LocalDate createdDate) {
+        @NotNull @JsonFormat(pattern = "dd/MM/yyyy")
+        @JsonDeserialize(using = StrictLocalDateDeserializer.class) LocalDate maturityDate,
+        @JsonFormat(pattern = "dd/MM/yyyy")
+        @JsonDeserialize(using = StrictLocalDateDeserializer.class) LocalDate createdDate) {
 }

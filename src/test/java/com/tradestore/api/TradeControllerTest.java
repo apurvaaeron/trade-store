@@ -115,6 +115,22 @@ class TradeControllerTest {
     }
 
     @Test
+    void invalidMaturityCalendarDateReturns400() throws Exception {
+        mvc.perform(post("/api/v1/trades").contentType(MediaType.APPLICATION_JSON)
+                        .content(BODY.replace("20/05/2030", "31/02/2030")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void invalidCreatedCalendarDateReturns400() throws Exception {
+        String withInvalidCreatedDate = BODY.replace("\"maturityDate\":\"20/05/2030\"",
+                "\"maturityDate\":\"20/05/2030\",\"createdDate\":\"31/02/2030\"");
+
+        mvc.perform(post("/api/v1/trades").contentType(MediaType.APPLICATION_JSON).content(withInvalidCreatedDate))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void fractionalVersionReturns400() throws Exception {
         mvc.perform(post("/api/v1/trades").contentType(MediaType.APPLICATION_JSON)
                         .content(BODY.replace("\"version\":1", "\"version\":2.9")))
