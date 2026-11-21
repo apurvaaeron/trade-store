@@ -10,6 +10,7 @@ import com.tradestore.audit.TradeAuditRepository;
 import com.tradestore.domain.TradeRepository;
 import com.tradestore.domain.TradeRequest;
 import com.tradestore.messaging.TradePublisher;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -19,7 +20,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.AfterEach;
@@ -146,10 +147,14 @@ class TradeStoreFlowIT {
 
     @Test
     void poisonMessageGoesToDeadLetterTopicWithoutBlockingThePartition() throws Exception {
-        kafkaTemplate.send(new ProducerRecord<>("trades.inbound", "P1", "not-json")).get();
-        publisher.publish(request("P2", 1, today.plusDays(1))).get();
+        byte[] original = "not-json".getBytes(StandardCharsets.UTF_8);
+        try (Consumer<String, byte[]> deadLetter = deadLetterConsumer()) {
+            kafkaTemplate.send("trades.inbound", "P1", original).get();
+            publisher.publish(request("P2", 1, today.plusDays(1))).get();
 
-        await().atMost(Duration.ofSeconds(30)).until(() -> tradeRepository.findById("P2").isPresent());
+            await().atMost(Duration.ofSeconds(30)).until(() -> tradeRepository.findById("P2").isPresent());
+            assertThat(pollDeadLetter(deadLetter)).containsExactly(original);
+        }
     }
 
     @Test
@@ -187,6 +192,20 @@ class TradeStoreFlowIT {
         return consumer;
     }
 
+    private Consumer<String, byte[]> deadLetterConsumer() {
+        KafkaConsumer<String, byte[]> consumer = new KafkaConsumer<>(Map.of(
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaContainer.getBootstrapServers(),
+                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false),
+                new StringDeserializer(), new ByteArrayDeserializer());
+        List<TopicPartition> partitions = consumer.partitionsFor("trades.inbound.dlt").stream()
+                .map(p -> new TopicPartition(p.topic(), p.partition()))
+                .toList();
+        consumer.assign(partitions);
+        consumer.seekToEnd(partitions);
+        partitions.forEach(consumer::position);
+        return consumer;
+    }
+
     private List<JsonNode> pollRejections(Consumer<String, String> consumer, int expected) throws Exception {
         List<JsonNode> received = new java.util.ArrayList<>();
         long deadline = System.currentTimeMillis() + 30_000;
@@ -196,6 +215,16 @@ class TradeStoreFlowIT {
             }
         }
         return received;
+    }
+
+    private byte[] pollDeadLetter(Consumer<String, byte[]> consumer) {
+        long deadline = System.currentTimeMillis() + 30_000;
+        while (System.currentTimeMillis() < deadline) {
+            for (ConsumerRecord<String, byte[]> record : consumer.poll(Duration.ofMillis(500))) {
+                return record.value();
+            }
+        }
+        throw new AssertionError("No dead-letter record received");
     }
 
     private static TradeRequest request(String id, int version, LocalDate maturity) {

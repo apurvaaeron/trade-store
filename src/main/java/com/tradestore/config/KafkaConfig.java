@@ -1,13 +1,20 @@
 package com.tradestore.config;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.Serializer;
+import org.springframework.boot.kafka.autoconfigure.DefaultKafkaProducerFactoryCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.kafka.support.serializer.DelegatingByTypeSerializer;
+import org.springframework.kafka.support.serializer.JacksonJsonSerializer;
 import org.springframework.util.backoff.FixedBackOff;
 
 @Configuration(proxyBeanMethods = false)
@@ -26,6 +33,17 @@ public class KafkaConfig {
     @Bean
     public NewTopic deadLetterTopic(TradeStoreProperties properties) {
         return TopicBuilder.name(properties.topics().deadLetter()).partitions(1).build();
+    }
+
+    @Bean
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public DefaultKafkaProducerFactoryCustomizer kafkaProducerFactoryCustomizer() {
+        return factory -> {
+            Map<Class<?>, Serializer<?>> serializers = new LinkedHashMap<>();
+            serializers.put(byte[].class, new ByteArraySerializer());
+            serializers.put(Object.class, new JacksonJsonSerializer<>());
+            factory.setValueSerializer((Serializer) new DelegatingByTypeSerializer(serializers, true));
+        };
     }
 
     /**
