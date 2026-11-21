@@ -21,8 +21,10 @@ import com.tradestore.service.TradeIngestionService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.kafka.KafkaException;
 import org.springframework.kafka.core.KafkaTemplate;
 
 class TradeKafkaListenerTest {
@@ -52,6 +54,7 @@ class TradeKafkaListenerTest {
     void publishesBusinessRejectionToRejectedTopic() {
         TradeRequest request = trade("T2", 1, TODAY);
         when(ingestion.ingest(request, Channel.KAFKA)).thenThrow(new LowerVersionException("T2", 1, 2));
+        when(template.send(eq("rejected"), eq("T2"), any())).thenReturn(CompletableFuture.completedFuture(null));
 
         listener.onTrade(request);
 
@@ -62,6 +65,18 @@ class TradeKafkaListenerTest {
         assertThat(rejection.version()).isEqualTo(1);
         assertThat(rejection.trade()).isEqualTo(request);
         assertThat(rejection.rejectedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    void rejectionPublicationFailurePropagatesToTheContainerErrorHandler() {
+        TradeRequest request = trade("T4", 1, TODAY);
+        when(ingestion.ingest(request, Channel.KAFKA)).thenThrow(new LowerVersionException("T4", 1, 2));
+        when(template.send(eq("rejected"), eq("T4"), any()))
+                .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("broker unavailable")));
+
+        assertThatThrownBy(() -> listener.onTrade(request))
+                .isInstanceOf(KafkaException.class)
+                .hasCauseInstanceOf(IllegalStateException.class);
     }
 
     @Test

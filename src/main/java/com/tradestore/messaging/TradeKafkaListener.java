@@ -6,6 +6,10 @@ import com.tradestore.domain.TradeRejectedException;
 import com.tradestore.domain.TradeRequest;
 import com.tradestore.service.TradeIngestionService;
 import java.time.Clock;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import org.springframework.kafka.KafkaException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -38,7 +42,15 @@ public class TradeKafkaListener {
         } catch (TradeRejectedException e) {
             TradeRejection rejection = new TradeRejection(e.getTradeId(), request.version(), e.getReason(),
                     e.getMessage(), request, clock.instant());
-            kafkaTemplate.send(properties.topics().rejected(), e.getTradeId(), rejection);
+            try {
+                kafkaTemplate.send(properties.topics().rejected(), e.getTradeId(), rejection).get(10, TimeUnit.SECONDS);
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                throw new KafkaException("Interrupted while publishing trade rejection", ex);
+            } catch (ExecutionException | TimeoutException ex) {
+                Throwable cause = ex instanceof ExecutionException && ex.getCause() != null ? ex.getCause() : ex;
+                throw new KafkaException("Failed to publish trade rejection", cause);
+            }
         }
     }
 }
