@@ -6,12 +6,13 @@ The brief allows AI tools provided all prompts are shared. This document lists t
 
 **Devin** (Cognition AI), an autonomous AI software engineer. It was used to:
 - review the brief and point out ambiguities (for example the T3 row), then draft assumptions, NFRs and the test strategy;
-- generate the Spring Boot code, tests (test-first), Cucumber scenarios, PlantUML diagrams, ADRs, Docker/Compose
+- generate the Spring Boot code and tests, Cucumber scenarios, PlantUML diagrams, ADRs, Docker/Compose
   files and the GitHub Actions pipeline;
 - run the build and test suites locally (Testcontainers) and fix failures.
 
 I set the direction (NFRs first, automation beyond regression, an explicit assumptions list, GitHub-based
-delivery), reviewed every design decision and the code, and I own the submission.
+delivery). The implementation and design decisions were generated for my review; I have not yet reviewed every
+decision or all of the code. I own the submission.
 
 ## Prompts (verbatim, in order)
 
@@ -33,4 +34,10 @@ Devin replied with draft assumptions, NFRs, a test pyramid, GitHub deployment op
 
 > raise the limit
 
-<!-- Add any follow-up prompts (review comments, change requests) below, in order. -->
+**Prompt 4**
+
+> raise and keep going
+
+**Prompt 5**
+
+> is it done?

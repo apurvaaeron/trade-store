@@ -1,14 +1,14 @@
 # Test strategy
 
-The code was built test-first: each rule started as a failing JUnit test in `TradeValidatorTest` /
-`TradeStoreServiceTest`, then the minimum code to pass it, then refactoring.
+The initial implementation was written before its tests. The tests now document and exercise the expected behavior,
+but the repository history does not demonstrate a red-green-refactor TDD workflow.
 
 "Regression testing" here is not a separate suite: **every automated test below runs on every pull request and
 push** and blocks the merge if it fails.
 
 | Layer | Tooling | What it proves | Where | Runs in |
 |---|---|---|---|---|
-| Unit (TDD) | JUnit 5, Mockito, AssertJ, parameterised tests | Each business rule including boundaries (maturity today−1 / today / today+1; version lower / same / higher; validation order; concurrent-race fallback) | `src/test/java/**/*Test.java` | `mvn test` (surefire) |
+| Unit (behavior) | JUnit Jupiter 6, Mockito, AssertJ, parameterised tests | Each business rule including boundaries (maturity today−1 / today / today+1; version lower / same / higher; validation order; concurrent-race fallback) | `src/test/java/**/*Test.java` | `mvn test` (surefire) |
 | Web slice | `@WebMvcTest`, MockMvc | HTTP contract: 201 / 202 / 400 / 404 / 422, ProblemDetail body, date format | `TradeControllerTest` | `mvn test` |
 | Integration | Testcontainers (PostgreSQL 16, MongoDB 7, Kafka 3.8) | Real SQL upsert semantics, expiry query, Kafka → DB, rejected topic, dead-letter handling, audit in MongoDB, Prometheus metrics | `src/test/java/**/it/*IT.java` | `mvn verify` (failsafe) |
 | Concurrency | 40 shuffled versions on 8 threads | Highest version always wins; no lost update | `ConcurrentVersionsIT` | `mvn verify` |

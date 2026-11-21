@@ -2,7 +2,7 @@ package com.tradestore.acceptance;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import com.tradestore.audit.TradeAuditRepository;
 import com.tradestore.domain.TradeRepository;
 import com.tradestore.it.MutableClock;
@@ -18,7 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.http.ResponseEntity;
 
 public class TradeStoreSteps {

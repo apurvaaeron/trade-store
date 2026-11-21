@@ -7,14 +7,14 @@ trade in sequence, and applies the rules from the brief:
 2. A trade whose **maturity date is before today** is rejected.
 3. Stored trades are **automatically marked expired** once their maturity date passes.
 
-**Stack:** Java 17, Spring Boot 3.5, Apache Kafka (streaming), PostgreSQL (SQL, current state), MongoDB (NoSQL,
-audit log), Flyway, Micrometer/Prometheus, JUnit 5 + Testcontainers + Cucumber, GitHub Actions.
+**Stack:** Java 17, Spring Boot 4.2, Apache Kafka (streaming), PostgreSQL (SQL, current state), MongoDB (NoSQL,
+audit log), Flyway, Micrometer/Prometheus, JUnit 6 + Testcontainers + Cucumber, GitHub Actions.
 
 | Document | Contents |
 |---|---|
 | [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md) | How the brief (including the contradictory T3 row) was interpreted, rule by rule |
 | [docs/NFR.md](docs/NFR.md) | Non-functional requirements, targets and how each is met |
-| [docs/TEST-STRATEGY.md](docs/TEST-STRATEGY.md) | Test pyramid, TDD approach, what runs where |
+| [docs/TEST-STRATEGY.md](docs/TEST-STRATEGY.md) | Test pyramid, behavior covered and what runs where |
 | [docs/adr/](docs/adr) | Architecture decision records |
 | [AI_PROMPTS.md](AI_PROMPTS.md) | AI usage disclosure and all prompts, as the brief requests |
 
@@ -91,7 +91,7 @@ Publishing straight to Kafka: topic `trades.inbound`, key = trade id, JSON value
 
 ## Tests
 
-Built test-first (TDD). Details in [docs/TEST-STRATEGY.md](docs/TEST-STRATEGY.md).
+The automated tests document and check the expected behavior; they were written after the initial implementation, so a red-green TDD process is not demonstrated. Details are in [docs/TEST-STRATEGY.md](docs/TEST-STRATEGY.md).
 
 ```bash
 mvn test       # unit + web-slice tests, no Docker needed
