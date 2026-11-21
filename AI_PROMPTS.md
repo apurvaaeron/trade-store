@@ -41,3 +41,7 @@ Devin replied with draft assumptions, NFRs, a test pyramid, GitHub deployment op
 **Prompt 5**
 
 > is it done?
+
+**Prompt 6** (local run guide)
+
+> continure on devin, create a local-run.md for me to test the app locally

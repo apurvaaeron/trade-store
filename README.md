@@ -17,6 +17,7 @@ audit log), Flyway, Micrometer/Prometheus, JUnit 6 + Testcontainers + Cucumber, 
 | [docs/TEST-STRATEGY.md](docs/TEST-STRATEGY.md) | Test pyramid, behavior covered and what runs where |
 | [docs/adr/](docs/adr) | Architecture decision records |
 | [AI_PROMPTS.md](AI_PROMPTS.md) | AI usage disclosure and all prompts, as the brief requests |
+| [local-run.md](local-run.md) | Feature-branch checkout, local Docker Compose setup, API examples and cleanup |
 
 ## Architecture
 
@@ -41,6 +42,8 @@ audit log), Flyway, Micrometer/Prometheus, JUnit 6 + Testcontainers + Cucumber, 
 PlantUML sources are in [docs/diagrams](docs/diagrams) (`java -jar plantuml.jar -tsvg docs/diagrams/*.puml`).
 
 ## Run it
+
+For the complete local test workflow, see [local-run.md](local-run.md).
 
 ```bash
 docker compose up -d --build          # Kafka, PostgreSQL, MongoDB and the app on :8080
