@@ -86,9 +86,9 @@ class TradeStoreFlowIT {
         ResponseEntity<JsonNode> lower = rest.postForEntity("/api/v1/trades", body("R2", 1, today.plusDays(5)), JsonNode.class);
         ResponseEntity<JsonNode> past = rest.postForEntity("/api/v1/trades", body("R3", 1, today.minusDays(1)), JsonNode.class);
 
-        assertThat(lower.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(lower.getStatusCode().value()).isEqualTo(422);
         assertThat(lower.getBody().get("reason").asText()).isEqualTo("LOWER_VERSION");
-        assertThat(past.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(past.getStatusCode().value()).isEqualTo(422);
         assertThat(past.getBody().get("reason").asText()).isEqualTo("MATURITY_DATE_IN_PAST");
         assertThat(tradeRepository.findById("R3")).isEmpty();
         assertThat(rest.getForEntity("/api/v1/trades/R2/audit", JsonNode.class).getBody()).hasSize(2);
