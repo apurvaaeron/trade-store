@@ -27,7 +27,9 @@ audit log), Flyway, Micrometer/Prometheus, JUnit 6 + Testcontainers + Cucumber, 
 - The version rule is enforced **atomically in the database** (`INSERT … ON CONFLICT … WHERE trades.version <= EXCLUDED.version`),
   so a lower version can never overwrite a higher one even under concurrent delivery ([ADR-0003](docs/adr/0003-atomic-conditional-upsert.md)).
 - Business rejections go to `trades.rejected` (and HTTP 422); technical failures are retried, then parked on `trades.inbound.dlt`.
-- Every received message, accepted or rejected, is written to the MongoDB audit log.
+- Audit events are written on a best-effort basis for decoded `TradeRequest` submissions that reach ingestion.
+  REST payloads that cannot be decoded return 400 before ingestion and are not audited; Kafka messages that cannot
+  be decoded bypass the audit and go to `trades.inbound.dlt`.
 
 | Diagram | |
 |---|---|
@@ -76,7 +78,7 @@ Publishing straight to Kafka: topic `trades.inbound`, key = trade id, JSON value
 | `POST /api/v1/trades` | Store a trade synchronously (201, 400 invalid payload, 422 business rejection) |
 | `POST /api/v1/trades/async` | Queue a trade on Kafka (202) |
 | `GET /api/v1/trades`, `GET /api/v1/trades/{id}` | Read current state |
-| `GET /api/v1/trades/{id}/audit` | Every message received for a trade, with outcome and reason |
+| `GET /api/v1/trades/{id}/audit` | Best-effort history for decodable submissions to a trade, with outcome and reason |
 | `POST /api/v1/trades/expiry-run` | Run the expiry sweep on demand |
 
 ## Configuration

@@ -17,7 +17,7 @@ assumptions the implementation and tests are built on. Each one is covered by at
 | # | Assumption |
 |---|---|
 | A1 | A trade is identified by `tradeId`. The store keeps the **latest version** of each trade (current state). |
-| A2 | Lower version → rejected with `LowerVersionException`. Same version → replaces the record (idempotent re-send / correction). Higher version → replaces. |
+| A2 | Lower version → rejected with `LowerVersionException`. Same version → replaces the record (supports corrections and re-sends). Higher version → replaces. |
 | A3 | Maturity date **equal to today is accepted**; only a date strictly before today is rejected (`MaturityDateInPastException`). |
 | A4 | Maturity is checked **before** version: a same/higher version with a past maturity is rejected and the stored record is untouched. |
 | A5 | "Today" is the business date in a configured time zone (`tradestore.zone`, default UTC), read from an injected `Clock`. |
@@ -34,18 +34,18 @@ assumptions the implementation and tests are built on. Each one is covered by at
 |---|---|
 | A12 | "Any method of transmission": Kafka (`trades.inbound`) is the primary channel; REST is offered synchronously (`POST /api/v1/trades`) and asynchronously via Kafka (`POST /api/v1/trades/async`). Every channel goes through the same `TradeIngestionService`. |
 | A13 | Messages are keyed by `tradeId`, so all versions of one trade are consumed in order from one partition. Different trades are processed in parallel. |
-| A14 | Delivery is at-least-once; processing is idempotent (re-delivering the same version is harmless). |
+| A14 | Delivery is at-least-once. A same-version redelivery can overwrite a later correction at that version because equal versions replace the stored record. |
 | A15 | Trades can still race (e.g. REST and Kafka at once, or partition rebalancing). The database upsert only applies when `stored.version <= incoming.version`, so a lower version can never overwrite a higher one. |
-| A16 | Business rejections are final (no retry): published to `trades.rejected` with the reason, audited, and returned as HTTP 422 (400 for malformed payloads). |
-| A17 | Technical failures (database down, poison message) are retried 3 times, then parked on `trades.inbound.dlt`, so one bad record never blocks a partition. |
+| A16 | Decodable business rejections are published to `trades.rejected` and audited on a best-effort basis; REST business-rule rejections return HTTP 422 and decoded payload validation failures return 400. REST payloads that cannot be deserialized return 400 before ingestion and are not audited. |
+| A17 | Technical failures, including Kafka messages that cannot be deserialized, are retried 3 times, then parked on `trades.inbound.dlt`; undecodable Kafka messages bypass the audit. |
 
 ## Storage
 
 | # | Assumption |
 |---|---|
 | A18 | PostgreSQL (SQL) holds the current state of each trade and is the source of truth. |
-| A19 | MongoDB (NoSQL) holds an immutable audit log of **every** message received (accepted and rejected, with reason and original payload). |
-| A20 | An audit write failure is logged and alerted but does not reject or roll back an accepted trade (see ADR-0002; the outbox pattern is the production follow-up). |
+| A19 | MongoDB (NoSQL) holds best-effort immutable audit events for decoded `TradeRequest` submissions that reach ingestion (accepted and business-rejected, with reason and decoded payload). REST payloads that cannot be deserialized and undecodable Kafka records produce no audit event. |
+| A20 | An audit write failure is logged but does not reject or roll back an accepted trade (see ADR-0002; the outbox pattern is the production follow-up). |
 
 ## Out of scope
 
