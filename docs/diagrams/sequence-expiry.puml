@@ -1,0 +1,18 @@
+@startuml sequence-expiry
+!theme plain
+title Automatic expiry of matured trades
+autonumber
+
+participant "Spring scheduler\n(cron 00:00, zone) / start-up" as cron
+participant TradeExpiryScheduler as sch
+participant TradeExpiryService as e
+participant Clock as c
+database PostgreSQL as pg
+
+cron -> sch : daily() / onStartup()
+sch -> e : expireMaturedTrades()
+e -> c : LocalDate.now(clock)
+e -> pg : UPDATE trades SET expired = true\nWHERE maturity_date < :today AND expired = false
+pg --> e : n rows
+e -> e : metric tradestore.trades.expired += n
+@enduml

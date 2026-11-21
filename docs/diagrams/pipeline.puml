@@ -1,0 +1,19 @@
+@startuml pipeline
+!theme plain
+title CI/CD pipeline (GitHub Actions)
+left to right direction
+
+rectangle "PR / push" as trigger
+rectangle "build-and-test\nunit (JUnit 5) -> integration (Testcontainers)\n-> acceptance (Cucumber) -> JaCoCo >= 85%" as build
+rectangle "mutation-tests\nPIT >= 70%" as pit
+rectangle "oss-vulnerability-scan\nTrivy fs (CRITICAL = fail)\nOWASP Dependency-Check (CVSS >= 9 = fail)" as scan
+rectangle "docker-image\nbuild -> Trivy image scan -> push GHCR (main)" as image
+rectangle "smoke-test\ndocker compose up -> REST calls" as smoke
+
+trigger --> build
+trigger --> pit
+trigger --> scan
+build --> image
+scan --> image
+image --> smoke
+@enduml

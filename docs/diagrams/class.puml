@@ -1,0 +1,91 @@
+@startuml class
+!theme plain
+title Trade Store - main classes
+hide empty members
+
+package domain {
+  class Trade <<Entity>> {
+    tradeId : String <<PK>>
+    version : int
+    counterPartyId : String
+    bookId : String
+    maturityDate : LocalDate
+    createdDate : LocalDate
+    expired : boolean
+  }
+  class TradeRequest <<record>> {
+    tradeId, version, counterPartyId,
+    bookId, maturityDate, createdDate?
+  }
+  class TradeValidator {
+    validate(TradeRequest, OptionalInt currentVersion)
+  }
+  interface TradeRepository {
+    upsertUnlessLowerVersion(Trade) : int
+    markExpired(LocalDate) : int
+  }
+  class TradeRejectedException {
+    tradeId : String
+    reason : RejectionReason
+  }
+  enum RejectionReason {
+    INVALID_PAYLOAD
+    LOWER_VERSION
+    MATURITY_DATE_IN_PAST
+  }
+  TradeRejectedException <|-- LowerVersionException
+  TradeRejectedException <|-- MaturityDateInPastException
+  TradeRejectedException <|-- InvalidTradeException
+  TradeRejectedException --> RejectionReason
+}
+
+package service {
+  class TradeIngestionService {
+    ingest(TradeRequest, Channel) : Trade
+  }
+  class TradeStoreService {
+    store(TradeRequest) : Trade
+    get(id) / getAll()
+  }
+  class TradeExpiryService {
+    expireMaturedTrades() : int
+  }
+  class TradeExpiryScheduler
+}
+
+package audit {
+  class TradeAuditService
+  class TradeAuditEvent <<Document>> {
+    tradeId, version, channel,
+    outcome, reason, payload, receivedAt
+  }
+  enum Channel {
+    REST
+    KAFKA
+  }
+}
+
+package messaging {
+  class TradeKafkaListener
+  class TradePublisher
+  class TradeRejection <<record>>
+}
+
+package api {
+  class TradeController
+  class ApiExceptionHandler
+}
+
+TradeController --> TradeIngestionService
+TradeController --> TradePublisher
+TradeKafkaListener --> TradeIngestionService
+TradeKafkaListener ..> TradeRejection
+TradeIngestionService --> TradeStoreService
+TradeIngestionService --> TradeAuditService
+TradeStoreService --> TradeValidator
+TradeStoreService --> TradeRepository
+TradeRepository ..> Trade
+TradeExpiryScheduler --> TradeExpiryService
+TradeExpiryService --> TradeRepository
+TradeAuditService ..> TradeAuditEvent
+@enduml
