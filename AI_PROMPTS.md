@@ -2,6 +2,10 @@
 
 The brief allows AI tools provided all prompts are shared. This document lists them.
 
+The complete design is also consolidated into one build prompt, [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md),
+for rebuilding the solution from scratch with a local coding agent (for example in IntelliJ). It was written after
+the implementation and checked against it (Prompt 21). The prompts below are the ones actually used to produce this repository.
+
 ## Tool
 
 **Devin** (Cognition AI), an autonomous AI software engineer. It was used to:
@@ -138,3 +142,17 @@ Devin ran Trivy at HIGH/CRITICAL, found that the pom scan misses managed depende
 > Go ahead and implement
 
 Devin added the bounded async wait with `503 UNKNOWN / FAILED`, the `tradestore.audit.failures` metric, the lz4-java/snappy-java upgrades, the Trivy HIGH/CRITICAL gate on the JAR and image, and the replay, cross-channel and rejection-publish-failure tests.
+
+**Prompt 21** (consolidated implementation plan)
+
+> Now I want you to create a full prompt for this whole case study for developer who uses a local coding agent in intellj and it should be such a way as if I have researched and planned it first and built the right prompt before passing to the local agent to build the entire solution from scratch, give me the prompt file here for download, there must be no conflicts with our actual implementation
+
+Devin wrote [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) from the current code, configuration, tests and docs.
+
+**Prompt 22** (submission email and plan in the repo)
+
+> I tested now give me the email content again, I intend to attach this prompt as well with the email, stating the research I have done with devin AI first to prepare a full implementaation plan
+
+> Yes do that and give me the email content
+
+Devin drafted the submission email, added the plan to `docs/` and linked it from this file and the README.
