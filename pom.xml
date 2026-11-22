@@ -24,7 +24,7 @@
         <jacoco.version>0.8.16</jacoco.version>
         <pitest.version>1.30.2</pitest.version>
         <pitest-junit5.version>1.2.3</pitest-junit5.version>
-        <dependency-check.version>12.2.2</dependency-check.version>
+        <dependency-check.version>13.0.0</dependency-check.version>
         <coverage.line.minimum>0.85</coverage.line.minimum>
         <mutation.threshold>70</mutation.threshold>
         <owasp.failBuildOnCVSS>9</owasp.failBuildOnCVSS>
