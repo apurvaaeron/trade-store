@@ -127,7 +127,23 @@ curl -i -X POST http://127.0.0.1:8080/api/v1/trades/expiry-run
 
 This runs the normal expiry sweep and returns `{"expired":N}`. It marks stored trades whose maturity date is strictly before today; a trade maturing today remains active. It does not advance time or force future trades to expire. The trades created above use a future date, so normally the count is zero. The API rejects past-maturity trades, so testing date progression/expiry is best done by the automated tests, which use a controllable `Clock`.
 
-## 5. Run tests (optional)
+## 5. Run the Postman collection (optional)
+
+The [`postman/`](postman/) folder has an 18-request collection with 37 assertions covering every rule above, plus Kafka, audit, expiry and metrics.
+
+- **Postman app:** File > Import both `postman/trade-store.postman_collection.json` and `postman/local.postman_environment.json`, select the **Trade Store - local** environment, then run the collection in order with the Collection Runner.
+- **Command line (Newman, no Node install needed):**
+
+```bash
+docker run --rm --network host -v "$PWD/postman:/etc/newman" postman/newman:6-alpine \
+  run trade-store.postman_collection.json -e local.postman_environment.json
+```
+
+On Docker Desktop (macOS/Windows), `--network host` may not reach the app; use `--env-var baseUrl=http://host.docker.internal:8080` or install Newman with `npm install -g newman` and run it directly.
+
+The first request generates unique trade IDs, so the collection can be re-run without cleaning data. Run the requests in order; later requests depend on earlier ones.
+
+## 6. Run tests (optional)
 
 With JDK 17 and Maven installed:
 

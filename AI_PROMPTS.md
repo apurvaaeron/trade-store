@@ -45,3 +45,29 @@ Devin replied with draft assumptions, NFRs, a test pyramid, GitHub deployment op
 **Prompt 6** (local run guide)
 
 > continure on devin, create a local-run.md for me to test the app locally
+
+**Prompt 7**
+
+> Is the case study complete?
+
+**Prompt 8** (account access, not about the solution)
+
+> Give e the git login commands
+
+**Prompt 9** (Postman collection)
+
+> do we have a postman collection for testing it?
+
+**Prompt 10** (unrelated account setting; not actioned in the repository)
+
+> turn off ChatGPT token sharing
+
+**Prompt 11**
+
+> check now, do we have a postman collection for testing it?
+
+**Prompt 12**
+
+> goahead
+
+Devin added the `postman/` collection and local environment, and verified them with Newman against the running stack.

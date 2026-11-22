@@ -1,0 +1,774 @@
+{
+  "info": {
+    "_postman_id": "f994f8ee-e44a-4145-90b3-dbe7d8d30cbe",
+    "name": "Trade Store",
+    "description": "End-to-end checks for the Trade Store API. Run the whole collection in order (Runner or Newman). The first request generates unique trade IDs, so it can be re-run without cleaning data.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health check (sets run IDs)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/actuator/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "actuator",
+            "health"
+          ]
+        },
+        "description": "Run first. Generates unique trade IDs so the collection can be re-run without cleaning the database."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Application is UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));",
+              "const run = Date.now().toString(36).toUpperCase();",
+              "pm.collectionVariables.set(\"tradeId\", \"PM-\" + run);",
+              "pm.collectionVariables.set(\"asyncTradeId\", \"PM-ASYNC-\" + run);",
+              "pm.collectionVariables.set(\"pollAttempts\", 0);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Version rules",
+      "item": [
+        {
+          "name": "New trade v1 -> 201",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/trades",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trades"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tradeId\": \"{{tradeId}}\",\n  \"version\": 1,\n  \"counterPartyId\": \"CP-ORIGINAL\",\n  \"bookId\": \"B1\",\n  \"maturityDate\": \"31/12/2099\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));",
+                  "const t = pm.response.json();",
+                  "pm.test(\"Stored as version 1, not expired\", () => { pm.expect(t.version).to.eql(1); pm.expect(t.expired).to.eql(\"N\"); });",
+                  "pm.test(\"createdDate defaulted to today (dd/MM/yyyy)\", () => pm.expect(t.createdDate).to.match(/^\\d{2}\\/\\d{2}\\/\\d{4}$/));",
+                  "pm.test(\"Location header points to the trade\", () => pm.expect(pm.response.headers.get(\"Location\")).to.include(pm.collectionVariables.get(\"tradeId\")));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Same version v1 replaces record -> 201",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/trades",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trades"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tradeId\": \"{{tradeId}}\",\n  \"version\": 1,\n  \"counterPartyId\": \"CP-SAME\",\n  \"bookId\": \"B1\",\n  \"maturityDate\": \"31/12/2099\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Counterparty replaced\", () => pm.expect(pm.response.json().counterPartyId).to.eql(\"CP-SAME\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Higher version v2 replaces record -> 201",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/trades",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trades"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tradeId\": \"{{tradeId}}\",\n  \"version\": 2,\n  \"counterPartyId\": \"CP-HIGHER\",\n  \"bookId\": \"B1\",\n  \"maturityDate\": \"31/12/2099\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Now version 2\", () => pm.expect(pm.response.json().version).to.eql(2));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lower version v1 rejected -> 422 LOWER_VERSION",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/trades",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trades"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tradeId\": \"{{tradeId}}\",\n  \"version\": 1,\n  \"counterPartyId\": \"CP-LOWER\",\n  \"bookId\": \"B1\",\n  \"maturityDate\": \"31/12/2099\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"Reason is LOWER_VERSION\", () => pm.expect(pm.response.json().reason).to.eql(\"LOWER_VERSION\"));",
+                  "pm.test(\"ProblemDetail names the trade\", () => pm.expect(pm.response.json().tradeId).to.eql(pm.collectionVariables.get(\"tradeId\")));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get trade -> still v2",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/trades/{{tradeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trades",
+                "{{tradeId}}"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const t = pm.response.json();",
+                  "pm.test(\"Version 2 kept, lower version did not overwrite\", () => { pm.expect(t.version).to.eql(2); pm.expect(t.counterPartyId).to.eql(\"CP-HIGHER\"); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Maturity and payload validation",
+      "item": [
+        {
+          "name": "Past maturity rejected -> 422 MATURITY_DATE_IN_PAST",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/trades",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trades"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tradeId\": \"{{tradeId}}-PAST\",\n  \"version\": 1,\n  \"counterPartyId\": \"CP-3\",\n  \"bookId\": \"B1\",\n  \"maturityDate\": \"20/05/2014\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"Reason is MATURITY_DATE_IN_PAST\", () => pm.expect(pm.response.json().reason).to.eql(\"MATURITY_DATE_IN_PAST\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Missing required fields -> 400 INVALID_PAYLOAD",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/trades",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trades"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tradeId\": \"{{tradeId}}-MISSING\",\n  \"bookId\": \"B1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Reason is INVALID_PAYLOAD\", () => pm.expect(pm.response.json().reason).to.eql(\"INVALID_PAYLOAD\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unsafe trade id -> 400 INVALID_PAYLOAD",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/trades",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trades"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tradeId\": \"BAD ID/1\",\n  \"version\": 1,\n  \"counterPartyId\": \"CP-1\",\n  \"bookId\": \"B1\",\n  \"maturityDate\": \"31/12/2099\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Reason is INVALID_PAYLOAD\", () => pm.expect(pm.response.json().reason).to.eql(\"INVALID_PAYLOAD\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Fractional version 2.9 -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/trades",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trades"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tradeId\": \"{{tradeId}}-FRACTION\",\n  \"version\": 2.9,\n  \"counterPartyId\": \"CP-1\",\n  \"bookId\": \"B1\",\n  \"maturityDate\": \"31/12/2099\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 400\", () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Impossible date 31/02/2030 -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/trades",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trades"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tradeId\": \"{{tradeId}}-BADDATE\",\n  \"version\": 1,\n  \"counterPartyId\": \"CP-1\",\n  \"bookId\": \"B1\",\n  \"maturityDate\": \"31/02/2030\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 400\", () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown trade -> 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/trades/{{tradeId}}-NOPE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trades",
+                "{{tradeId}}-NOPE"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 404\", () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Asynchronous ingestion via Kafka",
+      "item": [
+        {
+          "name": "Queue trade on Kafka -> 202",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/trades/async",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trades",
+                "async"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tradeId\": \"{{asyncTradeId}}\",\n  \"version\": 1,\n  \"counterPartyId\": \"CP-KAFKA\",\n  \"bookId\": \"B1\",\n  \"maturityDate\": \"31/12/2099\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 202\", () => pm.response.to.have.status(202));",
+                  "pm.test(\"Status QUEUED\", () => pm.expect(pm.response.json().status).to.eql(\"QUEUED\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Poll until consumed -> 200",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/trades/{{asyncTradeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trades",
+                "{{asyncTradeId}}"
+              ]
+            },
+            "description": "Retries for up to ~15 seconds while the Kafka consumer stores the trade."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "setTimeout(() => {}, 1000);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const attempts = Number(pm.collectionVariables.get(\"pollAttempts\") || 0) + 1;",
+                  "pm.collectionVariables.set(\"pollAttempts\", attempts);",
+                  "if (pm.response.code === 404 && attempts < 15) {",
+                  "  postman.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "  pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "  pm.test(\"Stored from Kafka\", () => pm.expect(pm.response.json().counterPartyId).to.eql(\"CP-KAFKA\"));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Audit, listing, expiry, metrics",
+      "item": [
+        {
+          "name": "Audit trail (MongoDB)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/trades/{{tradeId}}/audit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trades",
+                "{{tradeId}}",
+                "audit"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const outcomes = pm.response.json().map(e => e.outcome);",
+                  "pm.test(\"Accepted and rejected submissions are audited\", () => { pm.expect(outcomes).to.include(\"ACCEPTED\"); pm.expect(outcomes).to.include(\"REJECTED\"); });",
+                  "pm.test(\"Rejection reason recorded\", () => pm.expect(pm.response.json().map(e => e.reason)).to.include(\"LOWER_VERSION\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "List all trades",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/trades",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trades"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Contains this run's trade\", () => pm.expect(pm.response.json().map(t => t.tradeId)).to.include(pm.collectionVariables.get(\"tradeId\")));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Run expiry sweep",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/trades/expiry-run",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trades",
+                "expiry-run"
+              ]
+            },
+            "description": "Marks trades with maturity strictly before today as expired. Future-dated trades in this collection stay 'N'."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns expired count\", () => pm.expect(pm.response.json().expired).to.be.a(\"number\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Prometheus metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/prometheus",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "prometheus"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Trade counters exported\", () => pm.expect(pm.response.text()).to.include(\"tradestore_trades_received_total\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "tradeId",
+      "value": ""
+    },
+    {
+      "key": "asyncTradeId",
+      "value": ""
+    },
+    {
+      "key": "pollAttempts",
+      "value": "0"
+    }
+  ]
+}

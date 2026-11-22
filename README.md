@@ -43,7 +43,7 @@ PlantUML sources are in [docs/diagrams](docs/diagrams) (`java -jar plantuml.jar 
 
 ## Run it
 
-For the complete local test workflow, see [local-run.md](local-run.md).
+For the complete local test workflow, see [local-run.md](local-run.md). A ready-to-run Postman collection and environment are in [`postman/`](postman/).
 
 ```bash
 docker compose up -d --build          # Kafka, PostgreSQL, MongoDB and the app on :8080
