@@ -175,7 +175,7 @@ curl -i -X POST http://127.0.0.1:8080/api/v1/trades \
 
 ### Asynchronous Kafka ingestion and audit
 
-The asynchronous endpoint publishes to Kafka topic `trades.inbound` and returns **202 Accepted** with `status: QUEUED`. `202` means Kafka confirmed the write, not that the trade is stored yet. If Kafka doesn't confirm within 5 s (`TRADESTORE_ASYNC_PUBLISH_TIMEOUT`), the endpoint returns **503** with `outcome` `UNKNOWN` (it may still have been queued) or `FAILED`; resending the same payload is safe. The consumer stores the trade after the 202, so poll the GET endpoint for eventual **200 OK**:
+The asynchronous endpoint publishes to Kafka topic `trades.inbound` and returns **202 Accepted** with `status: QUEUED`. `202` means Kafka confirmed the write, not that the trade is stored yet. If Kafka doesn't confirm within 5 s (`TRADESTORE_ASYNC_PUBLISH_TIMEOUT`), the endpoint returns **503** with `outcome` `UNKNOWN` (it may still have been queued) or `FAILED`. Resending the same payload is fine unless you've sent another change to that trade version since (see assumption A14). The consumer stores the trade after the 202, so poll the GET endpoint for eventual **200 OK**:
 
 ```powershell
 Invoke-Api POST /api/v1/trades/async '{"tradeId":"LOCAL-ASYNC","version":1,"counterPartyId":"CP-KAFKA","bookId":"BOOK-1","maturityDate":"31/12/2099"}'

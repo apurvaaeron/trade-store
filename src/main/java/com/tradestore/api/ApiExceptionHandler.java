@@ -33,8 +33,9 @@ public class ApiExceptionHandler {
     }
 
     /**
-     * 503 when Kafka did not confirm an async trade. UNKNOWN means it may already be queued; resending the
-     * identical payload is safe because an equal version replaces the stored trade with the same data.
+     * 503 when Kafka did not confirm an async trade. UNKNOWN means it may already be queued: resend the identical
+     * payload only if no other change to this trade version was sent since, because an equal version replaces the
+     * stored trade (assumption A14).
      */
     @ExceptionHandler(TradePublishException.class)
     public ResponseEntity<ProblemDetail> publishNotConfirmed(TradePublishException e) {
