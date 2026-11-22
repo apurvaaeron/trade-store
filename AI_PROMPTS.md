@@ -77,3 +77,23 @@ Devin added the `postman/` collection and local environment, and verified them w
 > Also I would need steps in ocal run to run Junit and integration tests with test reports , I want to demonstrate NFRs n my local machine, need steps for that too
 
 Devin added test-report and NFR demonstration steps to `local-run.md`, plus the k6 load script `perf/nfr-load.js`, and ran each step against the local stack.
+
+**Prompt 14** (PowerShell compatibility)
+
+> This command is asking me to supply url curl -i http://127.0.0.1:8080/actuator/health
+
+> Change local run file for windows powershell compatible
+
+Devin rewrote `local-run.md` with Windows PowerShell commands first and Bash alternatives alongside, and ran the PowerShell commands in PowerShell 7 against the local stack.
+
+**Prompt 15** (code review)
+
+> Just check once the Java code quality and coding standards and explain why we have done thngs at code leve the way we did
+
+Devin ran SpotBugs, PMD and Checkstyle and explained the code-level design choices.
+
+**Prompt 16** (design principles)
+
+> List my concise design principles in a separate file
+
+Devin added `docs/DESIGN-PRINCIPLES.md`.

@@ -15,6 +15,7 @@ audit log), Flyway, Micrometer/Prometheus, JUnit 6 + Testcontainers + Cucumber, 
 | [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md) | How the brief (including the contradictory T3 row) was interpreted, rule by rule |
 | [docs/NFR.md](docs/NFR.md) | Non-functional requirements, targets and how each is met |
 | [docs/TEST-STRATEGY.md](docs/TEST-STRATEGY.md) | Test pyramid, behavior covered and what runs where |
+| [docs/DESIGN-PRINCIPLES.md](docs/DESIGN-PRINCIPLES.md) | Concise design principles behind the code and architecture |
 | [docs/adr/](docs/adr) | Architecture decision records |
 | [AI_PROMPTS.md](AI_PROMPTS.md) | AI usage disclosure and all prompts, as the brief requests |
 | [local-run.md](local-run.md) | Feature-branch checkout, local Docker Compose setup, API examples and cleanup |
