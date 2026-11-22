@@ -16,6 +16,7 @@ audit log), Flyway, Micrometer/Prometheus, JUnit 6 + Testcontainers + Cucumber, 
 | [docs/NFR.md](docs/NFR.md) | Non-functional requirements, targets and how each is met |
 | [docs/TEST-STRATEGY.md](docs/TEST-STRATEGY.md) | Test pyramid, behavior covered and what runs where |
 | [docs/DESIGN-PRINCIPLES.md](docs/DESIGN-PRINCIPLES.md) | Concise design principles behind the code and architecture |
+| [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) | Full build prompt for recreating the solution with a local coding agent |
 | [docs/adr/](docs/adr) | Architecture decision records |
 | [AI_PROMPTS.md](AI_PROMPTS.md) | AI usage disclosure and all prompts, as the brief requests |
 | [local-run.md](local-run.md) | Feature-branch checkout, local Docker Compose setup, API examples and cleanup |
