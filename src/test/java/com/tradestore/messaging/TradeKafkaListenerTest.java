@@ -23,10 +23,12 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.kafka.KafkaException;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
 
 class TradeKafkaListenerTest {
 
@@ -119,6 +121,21 @@ class TradeKafkaListenerTest {
                     assertThat(e.getOutcome()).isEqualTo(TradePublishException.Outcome.UNKNOWN);
                     assertThat(e.getTradeId()).isEqualTo("T8");
                 });
+    }
+
+    @Test
+    void publishAndAwaitCountsTimeSpentInsideSendAgainstTheTimeout() {
+        TradeRequest request = trade("T8", 1, TODAY);
+        CompletableFuture<SendResult<String, Object>> completesTooLate = new CompletableFuture<>();
+        when(template.send("in", "T8", request)).thenAnswer(invocation -> {
+            Thread.sleep(80);
+            CompletableFuture.delayedExecutor(40, TimeUnit.MILLISECONDS).execute(() -> completesTooLate.complete(null));
+            return completesTooLate;
+        });
+
+        assertThatThrownBy(() -> publisher.publishAndAwait(request))
+                .isInstanceOfSatisfying(TradePublishException.class,
+                        e -> assertThat(e.getOutcome()).isEqualTo(TradePublishException.Outcome.UNKNOWN));
     }
 
     @Test

@@ -28,8 +28,9 @@ public class TradePublisher {
         return kafkaTemplate.send(properties.topics().inbound(), request.tradeId(), request);
     }
 
-    /** Waits up to the configured timeout for Kafka to confirm the write (acks=all). */
+    /** Waits up to the configured timeout, including any metadata wait inside send, for Kafka to confirm (acks=all). */
     public void publishAndAwait(TradeRequest request) {
+        long deadline = System.nanoTime() + properties.async().publishTimeout().toNanos();
         CompletableFuture<SendResult<String, Object>> sent;
         try {
             sent = publish(request);
@@ -37,7 +38,7 @@ public class TradePublisher {
             throw new TradePublishException(request.tradeId(), Outcome.FAILED, e);
         }
         try {
-            sent.get(properties.async().publishTimeout().toMillis(), TimeUnit.MILLISECONDS);
+            sent.get(Math.max(0, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
         } catch (TimeoutException e) {
             throw new TradePublishException(request.tradeId(), Outcome.UNKNOWN, e);
         } catch (InterruptedException e) {
