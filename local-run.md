@@ -2,15 +2,13 @@
 
 This guide runs a local development/test stack; it does not deploy or host the application. Use the feature branch below until it has been merged—do not switch to `main` for these instructions.
 
-## 1. Check out the feature branch
+## 1. Get the code
 
 The same commands work in PowerShell and Bash:
 
 ```bash
 git clone https://github.com/apurvaaeron/trade-store.git
 cd trade-store
-git fetch origin
-git switch --track origin/devin/1795222949-trade-store-impl
 ```
 
 ## 2. Prerequisites
