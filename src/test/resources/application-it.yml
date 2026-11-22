@@ -1,0 +1,11 @@
+tradestore:
+  expiry:
+    run-on-startup: false
+spring:
+  kafka:
+    consumer:
+      group-id: trade-store-it
+logging:
+  level:
+    com.tradestore: WARN
+    org.apache.kafka: WARN

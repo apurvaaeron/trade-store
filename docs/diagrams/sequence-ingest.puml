@@ -1,0 +1,53 @@
+@startuml sequence-ingest
+!theme plain
+title Trade ingestion (Kafka path; REST sync path is identical from TradeIngestionService onwards)
+autonumber
+
+participant "Upstream" as up
+queue "trades.inbound" as in
+participant TradeKafkaListener as l
+participant TradeIngestionService as i
+participant TradeStoreService as s
+participant TradeValidator as v
+database PostgreSQL as pg
+participant TradeAuditService as a
+database MongoDB as m
+queue "trades.rejected" as rej
+
+up -> in : TradeRequest (key = tradeId)
+in -> l : poll (per-partition order)
+l -> i : ingest(request, KAFKA)
+i -> i : Bean Validation (required fields)
+alt payload invalid
+  i -> a : rejected(INVALID_PAYLOAD)
+  a -> m : insert audit event
+  i --> l : InvalidTradeException
+  l -> rej : TradeRejection
+else payload valid
+  i -> s : store(request)  [transaction]
+  s -> pg : SELECT version WHERE trade_id = ?
+  s -> v : validate(request, currentVersion)
+  alt maturity < today
+    v --> s : MaturityDateInPastException
+  else version < current
+    v --> s : LowerVersionException
+  else valid
+    s -> pg : INSERT ... ON CONFLICT DO UPDATE\nWHERE trades.version <= EXCLUDED.version
+    alt 0 rows (a higher version won a race)
+      s --> s : LowerVersionException
+    end
+  end
+  alt rejected
+    s --> i : TradeRejectedException
+    i -> a : rejected(reason)
+    a -> m : insert audit event
+    i --> l : rethrow
+    l -> rej : TradeRejection (tradeId, reason, payload)
+  else accepted
+    s --> i : Trade
+    i -> a : accepted
+    a -> m : insert audit event
+  end
+end
+l --> in : commit offset
+@enduml

@@ -1,0 +1,46 @@
+@startuml component
+!theme plain
+title Trade Store - component view
+skinparam componentStyle rectangle
+
+actor "Upstream trading\nsystems" as up
+actor "Ops / API client" as ops
+
+package "trade-store (Spring Boot)" {
+  [TradeController\nREST /api/v1/trades] as rest
+  [TradeKafkaListener] as listener
+  [TradePublisher] as pub
+  [TradeIngestionService\nvalidate payload, audit, metrics] as ingest
+  [TradeStoreService\n@Transactional] as store
+  [TradeValidator\nmaturity + version rules] as validator
+  [TradeExpiryScheduler\ncron + on start-up] as sched
+  [TradeExpiryService] as expiry
+  [TradeAuditService] as audit
+  [Actuator / Micrometer] as obs
+}
+
+queue "trades.inbound\n(key = tradeId)" as in
+queue "trades.rejected" as rej
+queue "trades.inbound.dlt" as dlt
+database "PostgreSQL\ntrades (current state)" as pg
+database "MongoDB\ntrade_audit (immutable log)" as mongo
+cloud "Prometheus / Grafana" as prom
+
+up --> in : publish trade
+ops --> rest : POST / GET
+rest --> ingest : sync path
+rest --> pub : async path
+pub --> in
+in --> listener
+listener --> ingest
+listener --> rej : business rejection
+listener ..> dlt : technical failure\n(after retries)
+ingest --> store
+store --> validator
+store --> pg : conditional upsert
+ingest --> audit
+audit --> mongo
+sched --> expiry
+expiry --> pg : mark expired
+obs --> prom
+@enduml

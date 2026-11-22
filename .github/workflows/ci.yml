@@ -1,0 +1,171 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MAVEN_OPTS: -Xmx2g
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  build-and-test:
+    name: Build, unit + integration + acceptance tests, coverage gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: mvn verify (JUnit unit tests, Testcontainers ITs, Cucumber acceptance, JaCoCo >= 85%)
+        run: mvn -B -ntp verify
+      - name: Publish test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            target/surefire-reports/
+            target/failsafe-reports/
+            target/site/jacoco/
+            target/cucumber-report.html
+          if-no-files-found: ignore
+      - name: Coverage summary
+        if: always()
+        run: |
+          if [ -f target/site/jacoco/jacoco.csv ]; then
+            awk -F, 'NR>1 {m+=$8; c+=$9} END {printf "### Line coverage: %.1f%%\n", 100*c/(m+c)}' target/site/jacoco/jacoco.csv >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  mutation-tests:
+    name: Mutation tests (PIT, threshold 70%)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - run: mvn -B -ntp test-compile org.pitest:pitest-maven:mutationCoverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pit-report
+          path: target/pit-reports/
+          if-no-files-found: ignore
+
+  oss-vulnerability-scan:
+    name: OSS vulnerability scan (fails on high/critical)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Build the application JAR (bundles every resolved dependency)
+        run: mvn -B -ntp package -DskipTests -Djacoco.skip=true
+      # Scans the built JAR, not pom.xml: a pom scan cannot resolve Spring Boot-managed or transitive versions.
+      # "Blocker" in the brief is mapped to HIGH and CRITICAL.
+      - name: Trivy dependency scan of the JAR (HIGH or CRITICAL fails the build)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: rootfs
+          scan-ref: target
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          format: table
+      - name: Restore NVD database cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: nvd-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: nvd-${{ runner.os }}-
+      - name: OWASP Dependency-Check (optional second opinion; needs NVD_API_KEY; CVSS >= 9 fails)
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          if [ -z "$NVD_API_KEY" ]; then
+            echo "::warning::NVD_API_KEY secret not set; OWASP Dependency-Check SKIPPED. Trivy (HIGH/CRITICAL) is the enforced gate."
+            echo "### OWASP Dependency-Check: SKIPPED (no NVD_API_KEY secret). Trivy HIGH/CRITICAL is the enforced gate." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          mvn -B -ntp -Powasp verify -DskipTests -Djacoco.skip=true
+      - name: Upload OWASP report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: owasp-dependency-check
+          path: target/dependency-check-report.*
+          if-no-files-found: ignore
+
+  docker-image:
+    name: Container image (build, scan, push on main)
+    needs: [build-and-test, mutation-tests, oss-vulnerability-scan]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
+      - name: Trivy image scan (HIGH or CRITICAL fails the build)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - name: Push to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker tag "$IMAGE:${{ github.sha }}" "$IMAGE:latest"
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+
+  smoke-test:
+    name: Smoke test (docker compose up, end-to-end call)
+    needs: [docker-image]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start stack
+        run: docker compose up -d --build --wait --wait-timeout 240
+      - name: Store and read a trade
+        run: |
+          MATURITY=$(date -d '+30 days' +%d/%m/%Y)
+          curl -sf -X POST localhost:8080/api/v1/trades -H 'Content-Type: application/json' \
+            -d "{\"tradeId\":\"SMOKE-1\",\"version\":1,\"counterPartyId\":\"CP-1\",\"bookId\":\"B1\",\"maturityDate\":\"$MATURITY\"}"
+          curl -sf localhost:8080/api/v1/trades/SMOKE-1 | grep -q '"expired":"N"'
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:8080/api/v1/trades -H 'Content-Type: application/json' \
+            -d '{"tradeId":"SMOKE-2","version":1,"counterPartyId":"CP-1","bookId":"B1","maturityDate":"20/05/2014"}')
+          test "$STATUS" = "422"
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs app
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v
