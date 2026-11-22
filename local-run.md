@@ -17,7 +17,7 @@ git switch --track origin/devin/1795222949-trade-store-impl
 
 - Docker Engine with Docker Compose v2. The app is built and run in containers, so host Java and Maven are **not** required to start the stack.
 - As a practical estimate, allow about 4 GB of RAM for Docker (6–8 GB is more comfortable) and several GB of free disk for the first image/dependency downloads. These are guidelines, not enforced limits.
-- Optional, for running tests on the host: JDK 17 and Maven 3.9.x. This repository has no Maven wrapper. `mvn verify` also needs Docker because it runs Testcontainers tests.
+- Optional, for running tests on the host: JDK 17 or newer (a JDK, not a JRE: `javac -version` must work) and Maven 3.9.x. This repository has no Maven wrapper. `mvn verify` also needs Docker because it runs Testcontainers tests.
 
 ### Which shell
 
@@ -450,6 +450,18 @@ Pass: Trivy lists no CRITICAL vulnerabilities and prints `exit 0` (it exits 1 on
 ## Troubleshooting and cleanup
 
 - **PowerShell asks `Supply values for the following parameters: Uri`:** you ran `curl` (an alias for `Invoke-WebRequest`) with Bash-style options. Press Ctrl+C and use the PowerShell commands above, or `curl.exe`.
+- **`mvn` fails with `No compiler is provided in this environment`:** Maven is running on a JRE, not a JDK. Install JDK 17+ and point `JAVA_HOME` at it, then open a new PowerShell window:
+
+  ```powershell
+  winget install EclipseAdoptium.Temurin.17.JDK
+  $jdk = (Get-ChildItem "C:\Program Files\Eclipse Adoptium" -Directory -Filter "jdk-17*" | Select-Object -First 1).FullName
+  [Environment]::SetEnvironmentVariable("JAVA_HOME", $jdk, "User")
+  $env:JAVA_HOME = $jdk; $env:Path = "$jdk\bin;$env:Path"
+  javac -version   # must print javac 17.x
+  mvn -v           # runtime path must be under the JDK folder
+  ```
+
+  If `mvn -v` still shows the old Java, remove the JRE entry from the system `JAVA_HOME`/`Path` variables.
 - **Port already in use:** check for another process using `8080`, `5432`, `27017`, or `9092` (PowerShell: `Get-NetTCPConnection -LocalPort 8080`), stop it, then retry. Compose binds these ports to `127.0.0.1`; do not change them to `0.0.0.0`. Kafka also advertises `localhost:9092`, so changing its host port requires updating that listener consistently.
 - **Build reports Maven Central HTTP 429:** the Docker build runs Maven inside the builder image and does not inherit the host's `~/.m2/settings.xml`. Retry after the rate limit clears, or configure a Maven mirror for the container build; do not copy credentials into the repository.
 - **Service/app startup or request problems:** inspect `docker compose ps` and `docker compose logs --tail=100 app` (or `docker compose logs -f app` while reproducing).
