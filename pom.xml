@@ -30,6 +30,22 @@
         <owasp.failBuildOnCVSS>9</owasp.failBuildOnCVSS>
     </properties>
 
+    <dependencyManagement>
+        <dependencies>
+            <!-- Kafka client compression libraries: pinned above the managed versions to fix HIGH CVEs -->
+            <dependency>
+                <groupId>at.yawk.lz4</groupId>
+                <artifactId>lz4-java</artifactId>
+                <version>1.11.4</version>
+            </dependency>
+            <dependency>
+                <groupId>org.xerial.snappy</groupId>
+                <artifactId>snappy-java</artifactId>
+                <version>1.1.10.9</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>

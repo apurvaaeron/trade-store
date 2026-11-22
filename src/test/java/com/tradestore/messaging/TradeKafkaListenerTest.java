@@ -18,6 +18,7 @@ import com.tradestore.domain.LowerVersionException;
 import com.tradestore.domain.RejectionReason;
 import com.tradestore.domain.TradeRequest;
 import com.tradestore.service.TradeIngestionService;
+import java.time.Duration;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -35,7 +36,8 @@ class TradeKafkaListenerTest {
     private final KafkaTemplate<String, Object> template = mock(KafkaTemplate.class);
     private final TradeStoreProperties properties = new TradeStoreProperties(ZoneOffset.UTC,
             new TradeStoreProperties.Topics("in", "rejected", "dlt", 1),
-            new TradeStoreProperties.Expiry("0 0 0 * * *", false));
+            new TradeStoreProperties.Expiry("0 0 0 * * *", false),
+            new TradeStoreProperties.Async(Duration.ofMillis(50)));
     private final TradeKafkaListener listener =
             new TradeKafkaListener(ingestion, template, properties, Clock.fixed(NOW, ZoneOffset.UTC));
     private final TradePublisher publisher = new TradePublisher(template, properties);
@@ -95,5 +97,49 @@ class TradeKafkaListenerTest {
         publisher.publish(request);
 
         verify(template).send("in", "T7", request);
+    }
+
+    @Test
+    void publishAndAwaitReturnsOnceKafkaConfirms() {
+        TradeRequest request = trade("T8", 1, TODAY);
+        when(template.send("in", "T8", request)).thenReturn(CompletableFuture.completedFuture(null));
+
+        publisher.publishAndAwait(request);
+
+        verify(template).send("in", "T8", request);
+    }
+
+    @Test
+    void publishAndAwaitReportsUnknownOutcomeWhenKafkaDoesNotConfirmInTime() {
+        TradeRequest request = trade("T8", 1, TODAY);
+        when(template.send("in", "T8", request)).thenReturn(new CompletableFuture<>());
+
+        assertThatThrownBy(() -> publisher.publishAndAwait(request))
+                .isInstanceOfSatisfying(TradePublishException.class, e -> {
+                    assertThat(e.getOutcome()).isEqualTo(TradePublishException.Outcome.UNKNOWN);
+                    assertThat(e.getTradeId()).isEqualTo("T8");
+                });
+    }
+
+    @Test
+    void publishAndAwaitReportsFailureWhenKafkaReturnsAnError() {
+        TradeRequest request = trade("T8", 1, TODAY);
+        when(template.send("in", "T8", request))
+                .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("broker error")));
+
+        assertThatThrownBy(() -> publisher.publishAndAwait(request))
+                .isInstanceOfSatisfying(TradePublishException.class,
+                        e -> assertThat(e.getOutcome()).isEqualTo(TradePublishException.Outcome.FAILED))
+                .hasRootCauseMessage("broker error");
+    }
+
+    @Test
+    void publishAndAwaitReportsFailureWhenSendFailsImmediately() {
+        TradeRequest request = trade("T8", 1, TODAY);
+        when(template.send("in", "T8", request)).thenThrow(new KafkaException("metadata timeout"));
+
+        assertThatThrownBy(() -> publisher.publishAndAwait(request))
+                .isInstanceOfSatisfying(TradePublishException.class,
+                        e -> assertThat(e.getOutcome()).isEqualTo(TradePublishException.Outcome.FAILED));
     }
 }

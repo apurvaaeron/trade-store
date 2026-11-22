@@ -283,6 +283,24 @@ class TradeStoreFlowIT {
         assertThat(rest.getForObject("/api/v1/trades/E2", JsonNode.class).get("expired").asText()).isEqualTo("N");
     }
 
+    /** Documents assumption A14: the message has no event id, so a replay of an equal version wins. */
+    @Test
+    void replayOfAnEqualVersionRestoresTheOlderPayload() throws Exception {
+        TradeRequest original = new TradeRequest("RP1", 1, "CP-ORIGINAL", "B1", today.plusDays(5), null);
+        TradeRequest correction = new TradeRequest("RP1", 1, "CP-CORRECTED", "B1", today.plusDays(5), null);
+
+        for (TradeRequest delivery : List.of(original, correction, original)) {
+            publisher.publish(delivery).get();
+            await().atMost(Duration.ofSeconds(30)).until(() -> tradeRepository.findById("RP1")
+                    .map(t -> t.getCounterPartyId().equals(delivery.counterPartyId())).orElse(false));
+        }
+
+        assertThat(tradeRepository.findById("RP1")).get().satisfies(t -> {
+            assertThat(t.getVersion()).isEqualTo(1);
+            assertThat(t.getCounterPartyId()).isEqualTo("CP-ORIGINAL");
+        });
+    }
+
     @Test
     void exposesHealthAndPrometheusMetrics() {
         rest.postForEntity("/api/v1/trades", body("M1", 1, today.plusDays(1)), JsonNode.class);

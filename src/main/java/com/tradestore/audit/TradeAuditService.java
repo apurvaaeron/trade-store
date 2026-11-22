@@ -3,6 +3,8 @@ package com.tradestore.audit;
 import com.tradestore.audit.TradeAuditEvent.Outcome;
 import com.tradestore.domain.TradeRejectedException;
 import com.tradestore.domain.TradeRequest;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.util.List;
 import org.slf4j.Logger;
@@ -11,7 +13,8 @@ import org.springframework.stereotype.Service;
 
 /**
  * Writes the audit trail to MongoDB. PostgreSQL stays the source of truth: an audit failure is logged
- * and never undoes or blocks an accepted trade (see ADR-0002 for the outbox follow-up).
+ * and counted in {@code tradestore.audit.failures} for alerting, and never undoes or blocks an accepted
+ * trade (see ADR-0002 for the outbox follow-up).
  */
 @Service
 public class TradeAuditService {
@@ -20,10 +23,12 @@ public class TradeAuditService {
 
     private final TradeAuditRepository repository;
     private final Clock clock;
+    private final MeterRegistry meterRegistry;
 
-    public TradeAuditService(TradeAuditRepository repository, Clock clock) {
+    public TradeAuditService(TradeAuditRepository repository, Clock clock, MeterRegistry meterRegistry) {
         this.repository = repository;
         this.clock = clock;
+        this.meterRegistry = meterRegistry;
     }
 
     public void accepted(TradeRequest request, Channel channel) {
@@ -45,6 +50,11 @@ public class TradeAuditService {
             repository.save(event);
         } catch (RuntimeException e) {
             log.error("Audit write failed for trade {} ({})", event.tradeId(), event.outcome(), e);
+            Counter.builder("tradestore.audit.failures")
+                    .description("Audit events that could not be written to MongoDB")
+                    .tag("outcome", event.outcome().name())
+                    .register(meterRegistry)
+                    .increment();
         }
     }
 }

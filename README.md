@@ -114,11 +114,11 @@ mvn test-compile org.pitest:pitest-maven:mutationCoverage   # mutation testing (
 |---|---|
 | `build-and-test` | Any unit, integration or acceptance test fails, or line coverage < 85% |
 | `mutation-tests` | Mutation score < 70% |
-| `oss-vulnerability-scan` | Trivy finds a **critical** vulnerability in dependencies; OWASP Dependency-Check finds CVSS ≥ 9 (runs when the `NVD_API_KEY` secret is set) |
-| `docker-image` | Trivy finds a critical vulnerability in the image; pushes to GHCR on `main` |
+| `oss-vulnerability-scan` | Trivy finds a **high or critical** vulnerability in the built JAR (the brief's "blocker" is mapped to HIGH and CRITICAL). OWASP Dependency-Check is optional: it runs only when the `NVD_API_KEY` secret is set (CVSS ≥ 9 fails) and is reported as SKIPPED in the job summary otherwise |
+| `docker-image` | Trivy finds a high or critical vulnerability in the image; pushes to GHCR on `main` |
 | `smoke-test` | The composed stack does not start or the API does not behave |
 
-To enable OWASP Dependency-Check, add a free NVD API key (https://nvd.nist.gov/developers/request-an-api-key) as the
+Trivy is the enforced gate. To enable the optional OWASP Dependency-Check, add a free NVD API key (https://nvd.nist.gov/developers/request-an-api-key) as the
 repository secret `NVD_API_KEY`.
 
 ## Deployment

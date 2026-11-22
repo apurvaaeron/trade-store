@@ -55,7 +55,7 @@ public class TradeController {
     /** Asynchronous ingestion through Kafka; rejections appear on the rejected-trades topic and in the audit. */
     @PostMapping("/async")
     public ResponseEntity<Map<String, String>> publish(@RequestBody TradeRequest request) {
-        publisher.publish(request).join();
+        publisher.publishAndAwait(request);
         return ResponseEntity.accepted().body(Map.of("tradeId", String.valueOf(request.tradeId()), "status", "QUEUED"));
     }
 

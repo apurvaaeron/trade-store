@@ -175,7 +175,7 @@ curl -i -X POST http://127.0.0.1:8080/api/v1/trades \
 
 ### Asynchronous Kafka ingestion and audit
 
-The asynchronous endpoint publishes to Kafka topic `trades.inbound` and returns **202 Accepted** with `status: QUEUED`. The consumer stores the trade after that response, so poll the GET endpoint for eventual **200 OK**:
+The asynchronous endpoint publishes to Kafka topic `trades.inbound` and returns **202 Accepted** with `status: QUEUED`. `202` means Kafka confirmed the write, not that the trade is stored yet. If Kafka doesn't confirm within 5 s (`TRADESTORE_ASYNC_PUBLISH_TIMEOUT`), the endpoint returns **503** with `outcome` `UNKNOWN` (it may still have been queued) or `FAILED`; resending the same payload is safe. The consumer stores the trade after the 202, so poll the GET endpoint for eventual **200 OK**:
 
 ```powershell
 Invoke-Api POST /api/v1/trades/async '{"tradeId":"LOCAL-ASYNC","version":1,"counterPartyId":"CP-KAFKA","bookId":"BOOK-1","maturityDate":"31/12/2099"}'
@@ -267,8 +267,8 @@ Needs JDK 17, Maven 3.9.x and Docker running (integration tests start their own 
 
 | What | Command | Tests | HTML report |
 |---|---|---|---|
-| Unit + web-slice tests (JUnit, Mockito, MockMvc; no Docker) | `mvn test` | 50 | `target/reports/surefire.html` (after the report step below) |
-| Everything: unit, integration, Cucumber acceptance, concurrency, performance smoke, coverage gate | `mvn verify` | 50 + 28 | `target/reports/surefire.html`, `target/reports/failsafe.html`, `target/cucumber-report.html`, `target/site/jacoco/index.html` |
+| Unit + web-slice tests (JUnit, Mockito, MockMvc; no Docker) | `mvn test` | 57 | `target/reports/surefire.html` (after the report step below) |
+| Everything: unit, integration, Cucumber acceptance, concurrency, performance smoke, coverage gate | `mvn verify` | 57 + 31 | `target/reports/surefire.html`, `target/reports/failsafe.html`, `target/cucumber-report.html`, `target/site/jacoco/index.html` |
 | Mutation testing (PIT, gate ≥ 70%) | `mvn test-compile org.pitest:pitest-maven:mutationCoverage` | – | `target/pit-reports/index.html` |
 
 ```powershell
@@ -292,7 +292,7 @@ xdg-open target/reports/failsafe.html                                           
 </details>
 
 - **surefire.html:** unit and web-slice tests per class, with pass/fail and timings.
-- **failsafe.html:** integration tests (`*IT`): repository upsert, Kafka flow, dead-letter handling, audit, concurrency, performance smoke, Cucumber.
+- **failsafe.html:** integration tests (`*IT`): repository upsert, Kafka flow, dead-letter handling, failed rejection publish, same-version replay, REST/Kafka race, audit, concurrency, performance smoke, Cucumber.
 - **cucumber-report.html:** the assignment's sample trades as business-readable scenarios.
 - **jacoco/index.html:** line/branch coverage of unit and integration tests combined (about 97% lines).
 - Raw XML/text output stays in `target/surefire-reports/` and `target/failsafe-reports/`.
@@ -431,7 +431,8 @@ The trade counters are labelled by `channel` (REST/KAFKA), `outcome` and rejecti
 **6. Security gates**
 
 ```powershell
-docker run --rm -v "${PWD}:/src" aquasec/trivy:0.57.1 fs --scanners vuln --severity CRITICAL --exit-code 1 /src; "exit $LASTEXITCODE"
+mvn -B package -DskipTests "-Djacoco.skip=true"
+docker run --rm -v "${PWD}/target:/scan" aquasec/trivy:0.57.1 rootfs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 /scan; "exit $LASTEXITCODE"
 docker compose exec app id
 ```
 
@@ -439,13 +440,14 @@ docker compose exec app id
 <summary>macOS / Linux / Git Bash</summary>
 
 ```bash
-docker run --rm -v "$PWD:/src" aquasec/trivy:0.57.1 fs --scanners vuln --severity CRITICAL --exit-code 1 /src; echo "exit $?"
+mvn -B package -DskipTests -Djacoco.skip=true
+docker run --rm -v "$PWD/target:/scan" aquasec/trivy:0.57.1 rootfs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 /scan; echo "exit $?"
 docker compose exec app id
 ```
 
 </details>
 
-Pass: Trivy lists no CRITICAL vulnerabilities and prints `exit 0` (it exits 1 on any critical, which is what fails the CI build). `id` shows the container runs as the non-root `app` user. To show the gate failing, CI's `oss-vulnerability-scan` job runs the same scan on every push. OWASP Dependency-Check runs with `$env:NVD_API_KEY = "<your key>"; mvn -Powasp verify -DskipTests` in PowerShell (`NVD_API_KEY=<your key> mvn -Powasp verify -DskipTests` in Bash) (a free NVD API key is needed; without one the first run takes very long).
+Pass: Trivy scans every library inside the built JAR, lists no HIGH or CRITICAL vulnerabilities and prints `exit 0` (it exits 1 on any, which is what fails the CI build). `id` shows the container runs as the non-root `app` user. To show the gate failing, CI's `oss-vulnerability-scan` job runs the same scan on every push. OWASP Dependency-Check is optional; it runs with `$env:NVD_API_KEY = "<your key>"; mvn -Powasp verify -DskipTests` in PowerShell (`NVD_API_KEY=<your key> mvn -Powasp verify -DskipTests` in Bash) (a free NVD API key is needed; without one the first run takes very long).
 
 ## Troubleshooting and cleanup
 

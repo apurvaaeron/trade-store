@@ -13,6 +13,7 @@ import com.tradestore.audit.TradeAuditEvent.Outcome;
 import com.tradestore.domain.MaturityDateInPastException;
 import com.tradestore.domain.RejectionReason;
 import com.tradestore.domain.TradeRequest;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -24,7 +25,9 @@ class TradeAuditServiceTest {
 
     private static final Instant NOW = TODAY.atStartOfDay().toInstant(ZoneOffset.UTC);
     private final TradeAuditRepository repository = mock(TradeAuditRepository.class);
-    private final TradeAuditService service = new TradeAuditService(repository, Clock.fixed(NOW, ZoneOffset.UTC));
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private final TradeAuditService service =
+            new TradeAuditService(repository, Clock.fixed(NOW, ZoneOffset.UTC), meterRegistry);
 
     @Test
     void recordsAcceptedTrade() {
@@ -59,6 +62,17 @@ class TradeAuditServiceTest {
         when(repository.save(any())).thenThrow(new IllegalStateException("mongo down"));
 
         assertThatCode(() -> service.accepted(trade("T1", 1, TODAY), Channel.REST)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void auditFailureIsCountedForAlerting() {
+        when(repository.save(any())).thenThrow(new IllegalStateException("mongo down"));
+
+        service.accepted(trade("T1", 1, TODAY), Channel.REST);
+        service.accepted(trade("T2", 1, TODAY), Channel.KAFKA);
+
+        assertThat(meterRegistry.get("tradestore.audit.failures").tag("outcome", "ACCEPTED").counter().count())
+                .isEqualTo(2.0);
     }
 
     @Test

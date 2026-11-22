@@ -2,7 +2,12 @@ package com.tradestore.messaging;
 
 import com.tradestore.config.TradeStoreProperties;
 import com.tradestore.domain.TradeRequest;
+import com.tradestore.messaging.TradePublishException.Outcome;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import org.springframework.kafka.KafkaException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
@@ -21,5 +26,25 @@ public class TradePublisher {
 
     public CompletableFuture<SendResult<String, Object>> publish(TradeRequest request) {
         return kafkaTemplate.send(properties.topics().inbound(), request.tradeId(), request);
+    }
+
+    /** Waits up to the configured timeout for Kafka to confirm the write (acks=all). */
+    public void publishAndAwait(TradeRequest request) {
+        CompletableFuture<SendResult<String, Object>> sent;
+        try {
+            sent = publish(request);
+        } catch (KafkaException e) {
+            throw new TradePublishException(request.tradeId(), Outcome.FAILED, e);
+        }
+        try {
+            sent.get(properties.async().publishTimeout().toMillis(), TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            throw new TradePublishException(request.tradeId(), Outcome.UNKNOWN, e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new TradePublishException(request.tradeId(), Outcome.UNKNOWN, e);
+        } catch (ExecutionException e) {
+            throw new TradePublishException(request.tradeId(), Outcome.FAILED, e.getCause());
+        }
     }
 }

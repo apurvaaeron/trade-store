@@ -17,6 +17,6 @@ The principles behind the trade store's code and architecture. Each one names wh
 13. **Schema as code.** Flyway owns the schema; Hibernate only validates it.
 14. **Configuration over constants.** Topics, partitions, zone and schedule are typed `@ConfigurationProperties` with defaults, overridable per environment.
 15. **Observable by default.** Health probes, Prometheus metrics tagged by channel, outcome and reason, and log values sanitised against injection.
-16. **Secure by default.** Input allow-lists, non-root container, localhost-bound ports, and builds that fail on critical vulnerabilities.
+16. **Secure by default.** Input allow-lists, non-root container, localhost-bound ports, and builds that fail on high or critical vulnerabilities.
 17. **Automate the quality gates.** Unit, integration (Testcontainers), acceptance (Cucumber), concurrency, performance, mutation (PIT) and coverage (JaCoCo) tests all run in CI on every change.
 18. **Make trade-offs explicit.** Assumptions, NFR targets, ADRs and known limitations are written down ([ASSUMPTIONS](ASSUMPTIONS.md), [NFR](NFR.md)).

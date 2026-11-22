@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.tradestore.config.TradeStoreProperties;
 import com.tradestore.domain.TradeRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.time.Clock;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
@@ -52,6 +53,7 @@ class TradeExpiryServiceTest {
     private static TradeStoreProperties properties(boolean runOnStartup) {
         return new TradeStoreProperties(ZoneOffset.UTC,
                 new TradeStoreProperties.Topics("in", "rej", "dlt", 1),
-                new TradeStoreProperties.Expiry("0 0 0 * * *", runOnStartup));
+                new TradeStoreProperties.Expiry("0 0 0 * * *", runOnStartup),
+                new TradeStoreProperties.Async(Duration.ofSeconds(5)));
     }
 }

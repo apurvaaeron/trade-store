@@ -39,6 +39,7 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
       properties:
         enable.idempotence: true
+        max.block.ms: 5000
         spring.json.add.type.headers: false
     listener:
       concurrency: 3
@@ -56,6 +57,8 @@ tradestore:
   expiry:
     cron: ${TRADESTORE_EXPIRY_CRON:0 0 0 * * *}
     run-on-startup: true
+  async:
+    publish-timeout: ${TRADESTORE_ASYNC_PUBLISH_TIMEOUT:5s}
 
 management:
   endpoints:

@@ -3,6 +3,7 @@ package com.tradestore.api;
 import static com.tradestore.TestTrades.TODAY;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -18,13 +19,14 @@ import com.tradestore.domain.MaturityDateInPastException;
 import com.tradestore.domain.Trade;
 import com.tradestore.domain.TradeNotFoundException;
 import com.tradestore.domain.TradeRequest;
+import com.tradestore.messaging.TradePublishException;
 import com.tradestore.messaging.TradePublisher;
 import com.tradestore.service.TradeExpiryService;
 import com.tradestore.service.TradeIngestionService;
 import com.tradestore.service.TradeStoreService;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -139,12 +141,34 @@ class TradeControllerTest {
 
     @Test
     void asyncPublishReturns202() throws Exception {
-        when(publisher.publish(any())).thenReturn(CompletableFuture.completedFuture(null));
-
         mvc.perform(post("/api/v1/trades/async").contentType(MediaType.APPLICATION_JSON).content(BODY))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.status").value("QUEUED"))
                 .andExpect(jsonPath("$.tradeId").value("T1"));
+    }
+
+    @Test
+    void asyncPublishWithoutKafkaConfirmationReturns503OutcomeUnknown() throws Exception {
+        doThrow(new TradePublishException("T1", TradePublishException.Outcome.UNKNOWN, new TimeoutException()))
+                .when(publisher).publishAndAwait(any());
+
+        mvc.perform(post("/api/v1/trades/async").contentType(MediaType.APPLICATION_JSON).content(BODY))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().string("Retry-After", "1"))
+                .andExpect(jsonPath("$.title").value("Publish outcome unknown"))
+                .andExpect(jsonPath("$.outcome").value("UNKNOWN"))
+                .andExpect(jsonPath("$.tradeId").value("T1"));
+    }
+
+    @Test
+    void asyncPublishRejectedByKafkaReturns503Failed() throws Exception {
+        doThrow(new TradePublishException("T1", TradePublishException.Outcome.FAILED, new IllegalStateException()))
+                .when(publisher).publishAndAwait(any());
+
+        mvc.perform(post("/api/v1/trades/async").contentType(MediaType.APPLICATION_JSON).content(BODY))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.title").value("Publish failed"))
+                .andExpect(jsonPath("$.outcome").value("FAILED"));
     }
 
     @Test
