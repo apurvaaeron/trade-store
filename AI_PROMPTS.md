@@ -71,3 +71,9 @@ Devin replied with draft assumptions, NFRs, a test pyramid, GitHub deployment op
 > goahead
 
 Devin added the `postman/` collection and local environment, and verified them with Newman against the running stack.
+
+**Prompt 13** (test reports and NFR demo)
+
+> Also I would need steps in ocal run to run Junit and integration tests with test reports , I want to demonstrate NFRs n my local machine, need steps for that too
+
+Devin added test-report and NFR demonstration steps to `local-run.md`, plus the k6 load script `perf/nfr-load.js`, and ran each step against the local stack.

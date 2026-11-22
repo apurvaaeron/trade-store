@@ -5,8 +5,8 @@ repository and covered by tests or the pipeline; **Design** = how it would be me
 
 | Category | Requirement | Target | How it is met | Status |
 |---|---|---|---|---|
-| Throughput | Sustained ingestion | ≥ 1,000 trades/s, bursts of 5,000 | Kafka partitions (3 by default) × listener concurrency; stateless app scales out horizontally | Smoke-tested in CI (`PerformanceSmokeIT`: 5,000 trades) |
-| Latency | Ingestion to stored | p99 < 200 ms (REST sync path) | Single indexed primary-key read + one upsert per trade | Design (measure with `http_server_requests` metrics) |
+| Throughput | Sustained ingestion | ≥ 1,000 trades/s, bursts of 5,000 | Kafka partitions (3 by default) × listener concurrency; stateless app scales out horizontally | Smoke-tested in CI (`PerformanceSmokeIT`: 5,000 trades); load-tested locally with `perf/nfr-load.js` (k6, async mode, 1,000 req/s) |
+| Latency | Ingestion to stored | p99 < 200 ms (REST sync path) | Single indexed primary-key read + one upsert per trade | Load-tested locally with `perf/nfr-load.js` (k6 threshold p99 < 200 ms); production would track `http_server_requests` |
 | Ordering | Versions of the same trade | Processed in order | Kafka key = `tradeId`; conditional upsert as safety net | Implemented + `ConcurrentVersionsIT` |
 | Consistency | Lower version never overwrites a higher one | 100% | `INSERT … ON CONFLICT … WHERE trades.version <= EXCLUDED.version` | Implemented + tests |
 | Durability | No accepted trade lost | RPO = 0 for accepted trades | Producer `acks=all` + idempotence; offset committed after the DB transaction | Implemented |
@@ -22,3 +22,5 @@ repository and covered by tests or the pipeline; **Design** = how it would be me
 | Portability | Run anywhere | One command | `docker compose up`; Dev Container / Codespaces config | Implemented |
 | Data | Schema evolution | Versioned, repeatable | Flyway migrations; Hibernate `validate` | Implemented |
 | Scalability | Data growth | Fast expiry over millions of rows | Partial index on `maturity_date WHERE expired = false` | Implemented |
+
+To demonstrate these targets on a local machine, see [local-run.md, section 7](../local-run.md#7-demonstrate-the-nfrs).

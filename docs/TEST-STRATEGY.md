@@ -29,4 +29,4 @@ mvn test-compile org.pitest:pitest-maven:mutationCoverage   # mutation report in
 NVD_API_KEY=... mvn -Powasp verify -DskipTests              # OWASP Dependency-Check
 ```
 
-Reports: `target/site/jacoco/index.html`, `target/cucumber-report.html`, `target/pit-reports/index.html`.
+Reports (run `mvn surefire-report:report-only surefire-report:failsafe-report-only -DlinkXRef=false` after `mvn verify` for the first two): `target/reports/surefire.html`, `target/reports/failsafe.html`, `target/site/jacoco/index.html`, `target/cucumber-report.html`, `target/pit-reports/index.html`.

@@ -143,17 +143,118 @@ On Docker Desktop (macOS/Windows), `--network host` may not reach the app; use `
 
 The first request generates unique trade IDs, so the collection can be re-run without cleaning data. Run the requests in order; later requests depend on earlier ones.
 
-## 6. Run tests (optional)
+## 6. Run JUnit and integration tests with reports
 
-With JDK 17 and Maven installed:
+Needs JDK 17, Maven 3.9.x and Docker running (integration tests start their own PostgreSQL, MongoDB and Kafka with Testcontainers; the Compose stack does not need to be up).
+
+| What | Command | Tests | HTML report |
+|---|---|---|---|
+| Unit + web-slice tests (JUnit, Mockito, MockMvc; no Docker) | `mvn test` | 50 | `target/reports/surefire.html` (after the report step below) |
+| Everything: unit, integration, Cucumber acceptance, concurrency, performance smoke, coverage gate | `mvn verify` | 50 + 28 | `target/reports/surefire.html`, `target/reports/failsafe.html`, `target/cucumber-report.html`, `target/site/jacoco/index.html` |
+| Mutation testing (PIT, gate ≥ 70%) | `mvn test-compile org.pitest:pitest-maven:mutationCoverage` | – | `target/pit-reports/index.html` |
 
 ```bash
-mvn test
-mvn verify
-mvn test-compile org.pitest:pitest-maven:mutationCoverage
+mvn verify                                   # about 2-4 minutes; BUILD SUCCESS means all tests and the 85% coverage gate passed
+mvn surefire-report:report-only surefire-report:failsafe-report-only -DlinkXRef=false
 ```
 
-`mvn test` runs unit/web tests. `mvn verify` also runs Testcontainers and acceptance tests, so Docker must be running. Reports are under `target/surefire-reports/`, `target/failsafe-reports/`, `target/site/jacoco/`, and `target/pit-reports/`.
+The second command turns the raw XML results into HTML pages, without re-running the tests. Open them in a browser:
+
+```bash
+open target/reports/surefire.html target/reports/failsafe.html target/cucumber-report.html target/site/jacoco/index.html   # macOS
+xdg-open target/reports/failsafe.html                                                                                       # Linux
+start target\reports\failsafe.html                                                                                          # Windows
+```
+
+- **surefire.html:** unit and web-slice tests per class, with pass/fail and timings.
+- **failsafe.html:** integration tests (`*IT`): repository upsert, Kafka flow, dead-letter handling, audit, concurrency, performance smoke, Cucumber.
+- **cucumber-report.html:** the assignment's sample trades as business-readable scenarios.
+- **jacoco/index.html:** line/branch coverage of unit and integration tests combined (about 97% lines).
+- Raw XML/text output stays in `target/surefire-reports/` and `target/failsafe-reports/`.
+
+Run a single class while presenting: `mvn test -Dtest=TradeStoreServiceTest`, or for an integration test `mvn verify -Dtest=none -Dsurefire.failIfNoSpecifiedTests=false -Dit.test=TradeStoreFlowIT -Djacoco.skip=true`.
+
+## 7. Demonstrate the NFRs
+
+Targets come from [docs/NFR.md](docs/NFR.md). Start the stack first (section 3). Load tests use [k6](https://k6.io) through Docker, so nothing extra needs installing; each run prints a summary and shows a check mark (pass) or cross (fail) for each threshold. On Docker Desktop (macOS/Windows), if `--network host` cannot reach the app, add `-e BASE_URL=http://host.docker.internal:8080` after `run`.
+
+Measured on an 8-vCPU Linux VM (your laptop numbers will differ):
+
+| NFR | Target | How to show it | Result on the VM |
+|---|---|---|---|
+| Throughput | ≥ 1,000 trades/s | Kafka (async) load test, step 1 | 1,000 req/s for 30 s, 0 errors, all 30,001 trades consumed |
+| Latency | p99 < 200 ms (REST sync) | Sync load test, step 2 | p99 13 ms at 200 req/s |
+| Durability (RPO 0) | No accepted trade lost | Stop the app, publish, restart, step 3 | 1,000 of 1,000 stored, consumer lag 0 |
+| Resilience | Poison message never blocks a partition | Step 3 poison message → DLT | Message on `trades.inbound.dlt`; later trades still processed |
+| Ordering / consistency | Lower version never overwrites | Concurrency test, step 4 (plus Postman) | 40 shuffled versions on 8 threads; highest wins |
+| Availability | Liveness/readiness probes | Step 5 | Both `UP` |
+| Observability | Accepted/rejected counts | Step 5 | Prometheus counters by channel, outcome, reason |
+| Security | Build fails on critical CVEs; non-root container | Step 6 | 0 critical findings; app runs as `app` |
+| Maintainability | Coverage ≥ 85%, mutation ≥ 70% | Section 6 | 97% line coverage; PIT 83% |
+
+**1. Throughput through Kafka (1,000 trades/s for 30 s)**
+
+```bash
+docker run --rm --network host -v "$PWD/perf:/perf" grafana/k6:0.54.0 run -e MODE=async -e RATE=1000 -e DURATION=30s /perf/nfr-load.js
+curl -s http://127.0.0.1:8080/actuator/prometheus | grep '^tradestore_trades_received_total'
+```
+
+Pass: `http_reqs` about 1000/s, `dropped_iterations` 0, and after a few seconds the `channel="KAFKA",outcome="accepted"` counter has grown by the same number of requests (every queued trade was consumed and stored). The in-build equivalent is `PerformanceSmokeIT`, which pushes 5,000 trades through Kafka and prints the rate (about 1,100 trades/s on the VM) to `target/failsafe-reports/com.tradestore.it.PerformanceSmokeIT-output.txt`.
+
+**2. Latency on the synchronous REST path (p99 < 200 ms)**
+
+```bash
+docker run --rm --network host -v "$PWD/perf:/perf" grafana/k6:0.54.0 run -e RATE=200 -e DURATION=60s /perf/nfr-load.js
+```
+
+Pass: `http_req_duration` p(99) under 200 ms and `http_req_failed` 0%. Raise `RATE` to find your machine's limit; k6 exits non-zero when a threshold fails.
+
+**3. Durability and dead-letter handling**
+
+Stop the app, publish 1,000 trades plus one malformed message straight to Kafka, then restart the app:
+
+```bash
+docker compose stop app
+{ seq 1 1000 | awk '{printf "DUR-%d|{\"tradeId\":\"DUR-%d\",\"version\":1,\"counterPartyId\":\"CP-1\",\"bookId\":\"B1\",\"maturityDate\":\"31/12/2099\"}\n",$1,$1}'
+  echo 'POISON-1|this is not json'; } |
+  docker compose exec -T kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server localhost:29092 \
+    --topic trades.inbound --property parse.key=true --property key.separator='|'
+docker compose start app && sleep 30
+
+docker compose exec -T postgres psql -U tradestore -tAc "select count(*) from trades where trade_id like 'DUR-%'"
+docker compose exec -T kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:29092 \
+  --topic trades.inbound.dlt --from-beginning --max-messages 1 --timeout-ms 15000 --property print.key=true
+docker compose exec -T kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:29092 --describe --group trade-store
+```
+
+Pass: count is `1000`, the DLT consumer prints `POISON-1  this is not json`, and `LAG` is `0` on every partition. Messages wait in Kafka while the app is down and are stored after restart; the malformed one is sent to the dead-letter topic and does not block the trades behind it. Re-running replaces the same DUR IDs (same version), so the count stays 1000; change the `DUR-` prefix in both commands for a fresh count.
+
+**4. Ordering and concurrency**
+
+```bash
+mvn verify -Dtest=none -Dsurefire.failIfNoSpecifiedTests=false -Dit.test='ConcurrentVersionsIT,PerformanceSmokeIT' -Djacoco.skip=true
+```
+
+`ConcurrentVersionsIT` fires 40 shuffled versions of the same trade from 8 threads and asserts the highest version is stored. Sections 4 and 5 show the same lower-version rejection over the API.
+
+**5. Availability probes and observability**
+
+```bash
+curl -s http://127.0.0.1:8080/actuator/health/liveness
+curl -s http://127.0.0.1:8080/actuator/health/readiness
+curl -s http://127.0.0.1:8080/actuator/prometheus | grep -E '^tradestore_|^http_server_requests_seconds_count'
+```
+
+The trade counters are labelled by `channel` (REST/KAFKA), `outcome` and rejection `reason`; `tradestore_trades_expired_total` counts expiries.
+
+**6. Security gates**
+
+```bash
+docker run --rm -v "$PWD:/src" aquasec/trivy:0.57.1 fs --scanners vuln --severity CRITICAL --exit-code 1 /src; echo "exit $?"
+docker compose exec app id
+```
+
+Pass: Trivy lists no CRITICAL vulnerabilities and prints `exit 0` (it exits 1 on any critical, which is what fails the CI build). `id` shows the container runs as the non-root `app` user. To show the gate failing, CI's `oss-vulnerability-scan` job runs the same scan on every push. OWASP Dependency-Check runs with `NVD_API_KEY=<your key> mvn -Powasp verify -DskipTests` (a free NVD API key is needed; without one the first run takes very long).
 
 ## Troubleshooting and cleanup
 
