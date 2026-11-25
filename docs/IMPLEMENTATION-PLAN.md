@@ -92,9 +92,11 @@ Group `com.tradestore`, artifact `trade-store`, version `1.0.0-SNAPSHOT`. Base p
 ```
 src/main/java/com/tradestore/
   TradeStoreApplication.java        @SpringBootApplication @ConfigurationPropertiesScan
-  api/TradeController.java          REST endpoints (section 5)
-  api/TradeResponse.java            record; dates dd/MM/yyyy; expired rendered "Y"/"N"; static from(Trade)
-  api/ApiExceptionHandler.java      @RestControllerAdvice -> ProblemDetail
+  api/TradeController.java          REST endpoints (section 5); BASE_PATH constant
+  api/TradeResponse.java            record; dates TradeFormats.DATE_PATTERN; expired rendered "Y"/"N"; static from(Trade)
+  api/TradeQueuedResponse.java      record (tradeId, status); static queued(tradeId) sets "QUEUED"
+  api/ExpiryRunResponse.java        record (expired)
+  api/ApiExceptionHandler.java      @RestControllerAdvice -> ProblemDetail; property-name constants + shared tradeProblem(...)
   audit/Channel.java                enum REST, KAFKA
   audit/TradeAuditEvent.java        @Document("trade_audit") record (section 6)
   audit/TradeAuditRepository.java   MongoRepository; findByTradeIdOrderByReceivedAtAsc
@@ -105,6 +107,7 @@ src/main/java/com/tradestore/
   config/TradeStoreProperties.java  @ConfigurationProperties("tradestore") record (section 8)
   domain/Trade.java                 JPA @Entity @Table("trades"); full constructor + getters; equals/hashCode/toString
   domain/TradeRequest.java          inbound record with Bean Validation (section 6)
+  domain/TradeFormats.java          DATE_PATTERN "dd/MM/yyyy", ID_PATTERN "[A-Za-z0-9._-]{1,64}"
   domain/TradeRepository.java       JpaRepository<Trade,String> + upsertUnlessLowerVersion + markExpired
   domain/TradeValidator.java        maturity rule then version rule
   domain/RejectionReason.java       enum INVALID_PAYLOAD, LOWER_VERSION, MATURITY_DATE_IN_PAST
@@ -119,6 +122,7 @@ src/main/java/com/tradestore/
   messaging/TradePublishException.java  outcome FAILED | UNKNOWN
   messaging/TradeKafkaListener.java @KafkaListener on inbound topic
   messaging/TradeRejection.java     record published to trades.rejected
+  observability/TradeMetrics.java   metric names, tag keys and tag values (section 8)
   service/TradeIngestionService.java single entry point for all channels
   service/TradeStoreService.java    validate + conditional upsert; get; getAll
   service/TradeExpiryService.java   expireMaturedTrades() @Transactional
@@ -126,6 +130,9 @@ src/main/java/com/tradestore/
 src/main/resources/application.yml
 src/main/resources/db/migration/V1__create_trades.sql
 ```
+
+Contract literals (JSON property names, wire formats, metric names and tags, the API base path) are defined once as
+constants; tests keep the literals so they check the wire contract independently. Response bodies are records, not maps.
 
 Note: Spring Boot 4 uses **Jackson 3** (`tools.jackson.*`; custom deserializers extend `ValueDeserializer`).
 Use no deprecated APIs: `HttpStatus.UNPROCESSABLE_CONTENT` (not `UNPROCESSABLE_ENTITY`), Jackson 3 `JsonNode.asString()`
@@ -392,7 +399,16 @@ mode (internal listener `kafka:29092`, external `localhost:9092`), and `app` (bu
 ports bound to 127.0.0.1**. Start with `docker compose up -d --build --wait --wait-timeout 240`.
 
 Also add `.devcontainer/devcontainer.json` (Java 17 + Maven + docker-in-docker), `.github/dependabot.yml`
-(maven, github-actions, docker; weekly), `.dockerignore`, `.gitignore`.
+(maven, github-actions, docker, terraform; weekly), `.dockerignore`, `.gitignore`.
+
+Cloud deployment (`infra/terraform`, ADR-0005; validated, applied manually): providers `hashicorp/google ~> 6.0`,
+`confluentinc/confluent ~> 2.0`, `mongodb/mongodbatlas ~> 1.21`, `hashicorp/random`, with the lock file committed.
+Cloud Run v2 (min 1 instance, `cpu_idle = false`, startup probe on readiness and liveness probe, Direct VPC egress
+`PRIVATE_RANGES_ONLY`); Cloud SQL `POSTGRES_16` with private IP only and `ssl_mode = ENCRYPTED_ONLY` (JDBC
+`sslmode=require`); Confluent Basic cluster, the three topics and app ACLs (prefixed `trades.` READ/WRITE/DESCRIBE,
+group `trade-store` READ, cluster DESCRIBE/IDEMPOTENT_WRITE); Atlas M0 on GCP with a `readWrite` user; Secret Manager
+for `DB_PASSWORD`, `MONGO_URI` and the Kafka SASL config (`SPRING_APPLICATION_JSON`). The demo-vs-production table
+and cost estimate are in `infra/terraform/README.md`.
 
 ## 12. CI/CD (`.github/workflows/ci.yml`)
 
@@ -416,6 +432,7 @@ Jobs (Temurin 17, Maven cache):
 5. `docker-image` (needs 1-3): build image, Trivy image scan `HIGH,CRITICAL` exit 1, push to GHCR only on `main`.
 6. `smoke-test` (needs 5): compose up, POST a valid trade and GET it (`"expired":"N"`), POST a past-maturity trade and
    expect `422`, logs on failure, `docker compose down -v`.
+7. `terraform`: in `infra/terraform`, `terraform fmt -check -recursive`, `terraform init -backend=false`, `terraform validate`.
 
 `.github/workflows/codeql.yml`: push to `main`, pull requests, weekly and manual; `github/codeql-action` v4,
 `languages: java-kotlin`, `build-mode: none`, `queries: security-extended`, `security-events: write`.
@@ -446,7 +463,7 @@ Jobs (Temurin 17, Maven cache):
   dependencies; small single-purpose classes; schema as code; configuration over constants; observable by default;
   secure by default; automated quality gates; explicit trade-offs). Only claim gates that CI actually runs.
 - `docs/adr/`: `0001-kafka-as-ingestion-backbone`, `0002-postgresql-state-mongodb-audit` (outbox as production
-  follow-up), `0003-atomic-conditional-upsert`, `0004-clock-driven-expiry` (context, decision, consequences).
+  follow-up), `0003-atomic-conditional-upsert`, `0004-clock-driven-expiry`, `0005-gcp-deployment-terraform` (context, decision, consequences).
 - `docs/diagrams/*.puml` (+ rendered SVGs): `component`, `class`, `sequence-ingest`, `sequence-expiry`, `pipeline`.
 - `README.md`: overview, architecture diagram, run commands, API examples, configuration table, tests, CI job table
   (what fails the build), deployment notes; links to all docs.
@@ -475,6 +492,7 @@ Jobs (Temurin 17, Maven cache):
 12. Trivy locally: `mvn -B package -DskipTests "-Djacoco.skip=true"` then
     `docker run --rm -v "${PWD}/target:/scan" aquasec/trivy:0.57.1 rootfs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 /scan`.
 13. k6, Postman, docs, diagrams, README, local-run, AI_PROMPTS. Checkpoint: Newman run passes every assertion.
+14. Terraform. Checkpoint: `terraform fmt -check -recursive` and `terraform init -backend=false; terraform validate`.
 
 ## 15. Definition of done
 

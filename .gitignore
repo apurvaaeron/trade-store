@@ -4,3 +4,11 @@ target/
 .vscode/
 .DS_Store
 *.log
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log

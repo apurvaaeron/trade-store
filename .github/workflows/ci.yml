@@ -159,6 +159,21 @@ jobs:
           fail-on-severity: high
           comment-summary-in-pr: on-failure
 
+  terraform:
+    name: Terraform format and validate (infra/terraform)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+
   docker-image:
     name: Container image (build, scan, push on main)
     needs: [build-and-test, mutation-tests, oss-vulnerability-scan]

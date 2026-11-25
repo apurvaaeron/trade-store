@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars (git-ignored) and fill in.
+project_id   = "my-gcp-project"
+atlas_org_id = "0123456789abcdef01234567"
+
+# Demo settings: public API, open Atlas access list, and resources that terraform destroy can delete.
+allow_unauthenticated = true
+deletion_protection   = false
+atlas_access_cidrs    = ["0.0.0.0/0"]
