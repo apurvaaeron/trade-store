@@ -3,6 +3,7 @@ package com.tradestore.audit;
 import com.tradestore.audit.TradeAuditEvent.Outcome;
 import com.tradestore.domain.TradeRejectedException;
 import com.tradestore.domain.TradeRequest;
+import com.tradestore.observability.TradeMetrics;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -50,9 +51,9 @@ public class TradeAuditService {
             repository.save(event);
         } catch (RuntimeException e) {
             log.error("Audit write failed for trade {} ({})", event.tradeId(), event.outcome(), e);
-            Counter.builder("tradestore.audit.failures")
+            Counter.builder(TradeMetrics.AUDIT_FAILURES)
                     .description("Audit events that could not be written to MongoDB")
-                    .tag("outcome", event.outcome().name())
+                    .tag(TradeMetrics.TAG_OUTCOME, event.outcome().name())
                     .register(meterRegistry)
                     .increment();
         }

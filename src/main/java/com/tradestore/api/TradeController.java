@@ -10,7 +10,6 @@ import com.tradestore.service.TradeIngestionService;
 import com.tradestore.service.TradeStoreService;
 import java.net.URI;
 import java.util.List;
-import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,8 +20,10 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
 @RestController
-@RequestMapping("/api/v1/trades")
+@RequestMapping(TradeController.BASE_PATH)
 public class TradeController {
+
+    static final String BASE_PATH = "/api/v1/trades";
 
     private final TradeIngestionService ingestionService;
     private final TradeStoreService storeService;
@@ -44,7 +45,7 @@ public class TradeController {
     @PostMapping
     public ResponseEntity<TradeResponse> store(@RequestBody TradeRequest request) {
         TradeResponse stored = TradeResponse.from(ingestionService.ingest(request, Channel.REST));
-        URI location = UriComponentsBuilder.fromPath("/api/v1/trades")
+        URI location = UriComponentsBuilder.fromPath(BASE_PATH)
                 .pathSegment(stored.tradeId())
                 .build()
                 .encode()
@@ -54,9 +55,9 @@ public class TradeController {
 
     /** Asynchronous ingestion through Kafka; rejections appear on the rejected-trades topic and in the audit. */
     @PostMapping("/async")
-    public ResponseEntity<Map<String, String>> publish(@RequestBody TradeRequest request) {
+    public ResponseEntity<TradeQueuedResponse> publish(@RequestBody TradeRequest request) {
         publisher.publishAndAwait(request);
-        return ResponseEntity.accepted().body(Map.of("tradeId", String.valueOf(request.tradeId()), "status", "QUEUED"));
+        return ResponseEntity.accepted().body(TradeQueuedResponse.queued(String.valueOf(request.tradeId())));
     }
 
     @GetMapping
@@ -76,7 +77,7 @@ public class TradeController {
 
     /** Operational trigger for the expiry sweep (normally run by the scheduler). */
     @PostMapping("/expiry-run")
-    public Map<String, Integer> runExpiry() {
-        return Map.of("expired", expiryService.expireMaturedTrades());
+    public ExpiryRunResponse runExpiry() {
+        return new ExpiryRunResponse(expiryService.expireMaturedTrades());
     }
 }

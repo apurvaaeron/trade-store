@@ -3,6 +3,7 @@ package com.tradestore.service;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import com.tradestore.domain.TradeRepository;
+import com.tradestore.observability.TradeMetrics;
 import java.time.Clock;
 import java.time.LocalDate;
 import org.slf4j.Logger;
@@ -22,7 +23,7 @@ public class TradeExpiryService {
     public TradeExpiryService(TradeRepository repository, Clock clock, MeterRegistry meterRegistry) {
         this.repository = repository;
         this.clock = clock;
-        this.expiredCounter = meterRegistry.counter("tradestore.trades.expired");
+        this.expiredCounter = meterRegistry.counter(TradeMetrics.TRADES_EXPIRED);
     }
 
     /** Marks every stored trade whose maturity date has passed as expired. Idempotent. */
