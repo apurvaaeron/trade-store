@@ -82,6 +82,8 @@ terraform destroy
 ```
 
 This needs `deletion_protection = false`, which the example tfvars sets. Confluent and Atlas resources are deleted too.
+Cloud SQL releases its private services peering a few minutes after the instance is deleted. If destroy stops with
+"Producer services ... are still using this connection", wait about 10 minutes and run `terraform destroy` again.
 
 ## Cost (estimate; check the GCP, Confluent and Atlas pricing pages)
 
