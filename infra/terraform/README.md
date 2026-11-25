@@ -24,7 +24,7 @@ CI runs `terraform fmt -check` and `terraform validate` on every pull request. N
 
 ## Prerequisites
 
-- Terraform >= 1.6 and the gcloud CLI. Cloud Shell and the repo's Codespace have both.
+- Terraform >= 1.6, the gcloud CLI and Docker. Cloud Shell has all three.
 - A GCP project with billing enabled. Your account needs Owner, or Editor plus Project IAM Admin and Secret Manager Admin.
 - A Confluent Cloud **Cloud resource management** API key (Confluent Cloud → API keys → Add key → My account).
 - A MongoDB Atlas **organization** API key with *Organization Project Creator* (Atlas → Organization → Access Manager →
@@ -55,8 +55,10 @@ terraform init
 # 1. Create the image repository first; Cloud Run cannot start without an image.
 terraform apply -target=google_artifact_registry_repository.images
 
-# 2. Build the image with Cloud Build and push it to that repository.
-gcloud builds submit ../.. --tag "$(terraform output -raw image)"
+# 2. Build the image and push it with your own credentials (no Cloud Build service account involved).
+IMAGE=$(terraform output -raw image)
+gcloud auth configure-docker "${IMAGE%%/*}" --quiet
+docker build -t "$IMAGE" ../.. && docker push "$IMAGE"
 
 # 3. Create everything else (about 10-15 minutes, mostly Cloud SQL).
 terraform apply
@@ -86,7 +88,7 @@ This needs `deletion_protection = false`, which the example tfvars sets. Conflue
 |---|---|---|
 | Cloud Run, 1 vCPU / 1 GiB, always on | `min_instance_count = 1`, CPU always allocated | about $2–3; the monthly free tier lowers this |
 | Cloud SQL `db-f1-micro`, zonal, 10 GB | no free tier | about $0.40 |
-| Artifact Registry, Secret Manager, Cloud Build | within free tiers | about $0 |
+| Artifact Registry, Secret Manager | within free tiers | about $0 |
 | Confluent Cloud Basic | sign-up credits | $0 within credits |
 | MongoDB Atlas M0 | free tier | $0 |
 

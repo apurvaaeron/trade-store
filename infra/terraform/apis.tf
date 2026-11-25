@@ -1,7 +1,6 @@
 locals {
   required_apis = [
     "artifactregistry.googleapis.com",
-    "cloudbuild.googleapis.com",
     "compute.googleapis.com",
     "iam.googleapis.com",
     "run.googleapis.com",
