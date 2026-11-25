@@ -84,7 +84,7 @@ class TradeControllerTest {
         when(ingestionService.ingest(any(), any())).thenThrow(new LowerVersionException("T1", 1, 2));
 
         mvc.perform(post("/api/v1/trades").contentType(MediaType.APPLICATION_JSON).content(BODY))
-                .andExpect(status().isUnprocessableEntity())
+                .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.reason").value("LOWER_VERSION"))
                 .andExpect(jsonPath("$.tradeId").value("T1"))
                 .andExpect(jsonPath("$.title").value("Trade rejected"));
@@ -96,7 +96,7 @@ class TradeControllerTest {
                 .thenThrow(new MaturityDateInPastException("T1", TODAY.minusDays(1), TODAY));
 
         mvc.perform(post("/api/v1/trades").contentType(MediaType.APPLICATION_JSON).content(BODY))
-                .andExpect(status().isUnprocessableEntity())
+                .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.reason").value("MATURITY_DATE_IN_PAST"));
     }
 
