@@ -18,6 +18,7 @@ import com.tradestore.domain.LowerVersionException;
 import com.tradestore.domain.RejectionReason;
 import com.tradestore.domain.Trade;
 import com.tradestore.domain.TradeRequest;
+import com.tradestore.observability.TradeMetrics;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
@@ -51,7 +52,7 @@ class TradeIngestionServiceTest {
         assertThat(service.ingest(request, Channel.REST)).isSameAs(stored);
 
         verify(auditService).accepted(request, Channel.REST);
-        assertThat(meterRegistry.get(TradeIngestionService.METRIC)
+        assertThat(meterRegistry.get(TradeMetrics.TRADES_RECEIVED)
                 .tags("channel", "REST", "outcome", "accepted").counter().count()).isEqualTo(1.0);
     }
 
@@ -65,7 +66,7 @@ class TradeIngestionServiceTest {
 
         verify(auditService).rejected(request, Channel.KAFKA, rejection);
         verify(auditService, never()).accepted(any(), any());
-        assertThat(meterRegistry.get(TradeIngestionService.METRIC)
+        assertThat(meterRegistry.get(TradeMetrics.TRADES_RECEIVED)
                 .tags("channel", "KAFKA", "outcome", "rejected", "reason", "LOWER_VERSION").counter().count())
                 .isEqualTo(1.0);
     }

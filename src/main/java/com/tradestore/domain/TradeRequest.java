@@ -1,6 +1,9 @@
 package com.tradestore.domain;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import static com.tradestore.domain.TradeFormats.DATE_PATTERN;
+import static com.tradestore.domain.TradeFormats.ID_PATTERN;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -13,12 +16,12 @@ import tools.jackson.databind.annotation.JsonDeserialize;
  * {@code createdDate} is optional; the store stamps today's business date when it is absent.
  */
 public record TradeRequest(
-        @NotBlank @Pattern(regexp = "[A-Za-z0-9._-]{1,64}") String tradeId,
+        @NotBlank @Pattern(regexp = ID_PATTERN) String tradeId,
         @NotNull @Positive @JsonDeserialize(using = StrictIntegerDeserializer.class) Integer version,
-        @NotBlank @Pattern(regexp = "[A-Za-z0-9._-]{1,64}") String counterPartyId,
-        @NotBlank @Pattern(regexp = "[A-Za-z0-9._-]{1,64}") String bookId,
-        @NotNull @JsonFormat(pattern = "dd/MM/yyyy")
+        @NotBlank @Pattern(regexp = ID_PATTERN) String counterPartyId,
+        @NotBlank @Pattern(regexp = ID_PATTERN) String bookId,
+        @NotNull @JsonFormat(pattern = DATE_PATTERN)
         @JsonDeserialize(using = StrictLocalDateDeserializer.class) LocalDate maturityDate,
-        @JsonFormat(pattern = "dd/MM/yyyy")
+        @JsonFormat(pattern = DATE_PATTERN)
         @JsonDeserialize(using = StrictLocalDateDeserializer.class) LocalDate createdDate) {
 }

@@ -1,5 +1,7 @@
 package com.tradestore.api;
 
+import static com.tradestore.domain.TradeFormats.DATE_PATTERN;
+
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.tradestore.domain.Trade;
 import java.time.LocalDate;
@@ -9,8 +11,8 @@ public record TradeResponse(
         int version,
         String counterPartyId,
         String bookId,
-        @JsonFormat(pattern = "dd/MM/yyyy") LocalDate maturityDate,
-        @JsonFormat(pattern = "dd/MM/yyyy") LocalDate createdDate,
+        @JsonFormat(pattern = DATE_PATTERN) LocalDate maturityDate,
+        @JsonFormat(pattern = DATE_PATTERN) LocalDate createdDate,
         String expired) {
 
     public static TradeResponse from(Trade trade) {
