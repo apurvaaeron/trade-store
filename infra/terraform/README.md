@@ -49,7 +49,7 @@ $env:MONGODB_ATLAS_PUBLIC_KEY = "..."; $env:MONGODB_ATLAS_PRIVATE_KEY = "..."
 
 ```bash
 cd infra/terraform
-cp terraform.tfvars.example terraform.tfvars   # set project_id and atlas_org_id
+cp terraform.tfvars.example terraform.tfvars   # set project_id, atlas_org_id and image_tag (git rev-parse --short HEAD)
 terraform init
 
 # 1. Create the image repository first; Cloud Run cannot start without an image.
@@ -72,7 +72,8 @@ curl -s -X POST "$URL/api/v1/trades" -H 'Content-Type: application/json' \
 
 The app runs Flyway migrations on start-up. It finds the Kafka topics already created by Terraform.
 
-To roll out a new version, push a new tag in step 2 and run `terraform apply -var image_tag=<tag>`.
+To roll out a new version, set a new `image_tag` in `terraform.tfvars`, repeat step 2, then run `terraform apply`.
+Keep the tag in the tfvars file rather than passing `-var`, so a later infrastructure-only apply cannot revert the image.
 
 ## Tear down
 

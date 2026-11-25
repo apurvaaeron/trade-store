@@ -21,9 +21,13 @@ variable "service_name" {
 }
 
 variable "image_tag" {
-  description = "Tag of the trade-store image in this project's Artifact Registry repository."
+  description = "Immutable tag (for example the git short SHA) of the image in this project's Artifact Registry repository. Keep it in terraform.tfvars so every apply deploys the same image."
   type        = string
-  default     = "latest"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$", var.image_tag)) && var.image_tag != "latest"
+    error_message = "Use a valid, immutable Docker tag such as the git short SHA; \"latest\" would let applies silently change the running image."
+  }
 }
 
 variable "business_zone" {
