@@ -60,7 +60,7 @@ terraform apply -target=google_artifact_registry_repository.images
 TAG=$(echo 'var.image_tag' | terraform console | tr -d '"')
 IMAGE="$(terraform output -raw image_repository)/trade-store:$TAG"
 gcloud auth configure-docker "${IMAGE%%/*}" --quiet
-docker build -t "$IMAGE" ../.. && docker push "$IMAGE"
+docker build --platform linux/amd64 -t "$IMAGE" ../.. && docker push "$IMAGE"   # Cloud Run runs amd64
 
 # 3. Create everything else (about 10-15 minutes, mostly Cloud SQL).
 terraform apply
