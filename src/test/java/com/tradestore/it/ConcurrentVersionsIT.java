@@ -23,7 +23,6 @@ import java.util.concurrent.Future;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.resttestclient.TestRestTemplate;
 
 /** Many versions of one trade arrive at once, in random order: the highest version must win. */
 @IntegrationTest
@@ -36,7 +35,7 @@ class ConcurrentVersionsIT {
     @Autowired
     private TradePublisher publisher;
     @Autowired
-    private TestRestTemplate rest;
+    private TradeStoreClient rest;
 
     @Test
     void highestVersionAlwaysWinsUnderConcurrentDelivery() throws Exception {
@@ -85,7 +84,7 @@ class ConcurrentVersionsIT {
             List<Future<?>> futures = versions.stream().<Future<?>>map(v -> pool.submit(() -> {
                 start.await();
                 if (v % 2 == 0) {
-                    rest.postForEntity("/api/v1/trades", Map.of("tradeId", "X1", "version", v,
+                    rest.post("/api/v1/trades", Map.of("tradeId", "X1", "version", v,
                             "counterPartyId", "CP-" + v, "bookId", "B1",
                             "maturityDate", "%02d/%02d/%d".formatted(maturity.getDayOfMonth(),
                                     maturity.getMonthValue(), maturity.getYear())), String.class);

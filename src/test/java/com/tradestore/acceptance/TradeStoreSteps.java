@@ -6,6 +6,7 @@ import tools.jackson.databind.JsonNode;
 import com.tradestore.audit.TradeAuditRepository;
 import com.tradestore.domain.TradeRepository;
 import com.tradestore.it.MutableClock;
+import com.tradestore.it.TradeStoreClient;
 import io.cucumber.datatable.DataTable;
 import io.cucumber.java.After;
 import io.cucumber.java.en.Given;
@@ -18,7 +19,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.http.ResponseEntity;
 
 public class TradeStoreSteps {
@@ -26,7 +26,7 @@ public class TradeStoreSteps {
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     @Autowired
-    private TestRestTemplate rest;
+    private TradeStoreClient rest;
     @Autowired
     private TradeRepository tradeRepository;
     @Autowired
@@ -69,16 +69,16 @@ public class TradeStoreSteps {
     @When("the business date moves to {string} and the expiry job runs")
     public void expiryRuns(String date) {
         todayIs(date);
-        rest.postForEntity("/api/v1/trades/expiry-run", null, JsonNode.class);
+        rest.post("/api/v1/trades/expiry-run", null, JsonNode.class);
     }
 
     @Then("the trade store contains")
     public void storeContains(DataTable expected) {
-        JsonNode trades = rest.getForObject("/api/v1/trades", JsonNode.class);
+        JsonNode trades = rest.getBody("/api/v1/trades", JsonNode.class);
         List<Map<String, String>> actual = new java.util.ArrayList<>();
         for (JsonNode t : trades) {
             Map<String, String> row = new LinkedHashMap<>();
-            expected.row(0).forEach(column -> row.put(column, t.get(column).asText()));
+            expected.row(0).forEach(column -> row.put(column, t.get(column).asString()));
             actual.add(row);
         }
         assertThat(actual).containsExactlyElementsOf(expected.asMaps());
@@ -88,7 +88,7 @@ public class TradeStoreSteps {
     public void rejectedWith(String tradeId, int version, String reason) {
         ResponseEntity<JsonNode> response = responses.get(tradeId + "#" + version);
         assertThat(response.getStatusCode().value()).isEqualTo(422);
-        assertThat(response.getBody().get("reason").asText()).isEqualTo(reason);
+        assertThat(response.getBody().get("reason").asString()).isEqualTo(reason);
     }
 
     @Then("trade {string} version {int} is accepted")
@@ -103,15 +103,15 @@ public class TradeStoreSteps {
 
     @Then("trade {string} has expired flag {string}")
     public void expiredFlag(String tradeId, String flag) {
-        assertThat(rest.getForObject("/api/v1/trades/" + tradeId, JsonNode.class).get("expired").asText())
+        assertThat(rest.getBody("/api/v1/trades/" + tradeId, JsonNode.class).get("expired").asString())
                 .isEqualTo(flag);
     }
 
     @Then("the audit trail for trade {string} shows {string}")
     public void auditShows(String tradeId, String outcomes) {
-        JsonNode audit = rest.getForObject("/api/v1/trades/" + tradeId + "/audit", JsonNode.class);
+        JsonNode audit = rest.getBody("/api/v1/trades/" + tradeId + "/audit", JsonNode.class);
         List<String> actual = new java.util.ArrayList<>();
-        audit.forEach(e -> actual.add(e.get("outcome").asText()));
+        audit.forEach(e -> actual.add(e.get("outcome").asString()));
         assertThat(String.join(", ", actual)).isEqualTo(outcomes);
     }
 
@@ -123,6 +123,6 @@ public class TradeStoreSteps {
             }
         });
         responses.put(row.get("tradeId") + "#" + row.get("version"),
-                rest.postForEntity("/api/v1/trades", body, JsonNode.class));
+                rest.post("/api/v1/trades", body, JsonNode.class));
     }
 }

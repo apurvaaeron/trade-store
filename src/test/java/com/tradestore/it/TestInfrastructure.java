@@ -1,9 +1,11 @@
 package com.tradestore.it;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
+import org.springframework.test.web.servlet.client.RestTestClient;
 import org.testcontainers.mongodb.MongoDBContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.kafka.KafkaContainer;
@@ -35,5 +37,10 @@ public class TestInfrastructure {
     @Primary
     MutableClock testClock() {
         return MutableClock.utcNow();
+    }
+
+    @Bean
+    TradeStoreClient tradeStoreClient(ObjectProvider<RestTestClient> restTestClient) {
+        return new TradeStoreClient(restTestClient);
     }
 }

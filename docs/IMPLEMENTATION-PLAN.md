@@ -128,6 +128,8 @@ src/main/resources/db/migration/V1__create_trades.sql
 ```
 
 Note: Spring Boot 4 uses **Jackson 3** (`tools.jackson.*`; custom deserializers extend `ValueDeserializer`).
+Use no deprecated APIs: `HttpStatus.UNPROCESSABLE_CONTENT` (not `UNPROCESSABLE_ENTITY`), Jackson 3 `JsonNode.asString()`
+(not `asText()`), and `RestTestClient` with `@AutoConfigureRestTestClient` (not `TestRestTemplate`, deprecated for removal in Boot 4.2).
 
 ## 5. REST API (base path `/api/v1/trades`)
 
@@ -324,9 +326,11 @@ Plugins:
 
 Test helpers: `TestTrades` (fixed `TODAY`, `trade(id, version, maturity)` factories); `it/MutableClock` (settable
 `Clock`, `setToday(LocalDate)` = start of day + 1 h, `reset()`); `it/TestInfrastructure` (`@TestConfiguration`
-with `@ServiceConnection` containers `postgres:16-alpine`, `mongo:7.0`, `apache/kafka:3.8.0` and a `@Primary MutableClock`);
+with `@ServiceConnection` containers `postgres:16-alpine`, `mongo:7.0`, `apache/kafka:3.8.0`, a `@Primary MutableClock`
+and a `TradeStoreClient` bean); `it/TradeStoreClient` (wraps `RestTestClient`; `post`/`get`/`getBody` return a `ResponseEntity`
+without asserting, so tests check 4xx responses too);
 `it/IntegrationTest` meta-annotation (`@SpringBootTest(RANDOM_PORT)`, `@AutoConfigureMetrics`,
-`@AutoConfigureTestRestTemplate`, `@Import(TestInfrastructure.class)`, `@ActiveProfiles("it")`) so all ITs share one
+`@AutoConfigureRestTestClient`, `@Import(TestInfrastructure.class)`, `@ActiveProfiles("it")`) so all ITs share one
 context. `application-it.yml`: `tradestore.expiry.run-on-startup: false`, consumer group `trade-store-it`, log level WARN.
 
 Unit / web slice (`mvn test`, no Docker):

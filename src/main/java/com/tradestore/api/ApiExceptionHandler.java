@@ -19,7 +19,7 @@ public class ApiExceptionHandler {
     public ProblemDetail rejected(TradeRejectedException e) {
         HttpStatus status = e.getReason() == RejectionReason.INVALID_PAYLOAD
                 ? HttpStatus.BAD_REQUEST
-                : HttpStatus.UNPROCESSABLE_ENTITY;
+                : HttpStatus.UNPROCESSABLE_CONTENT;
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, e.getMessage());
         problem.setTitle("Trade rejected");
         problem.setProperty("tradeId", e.getTradeId());

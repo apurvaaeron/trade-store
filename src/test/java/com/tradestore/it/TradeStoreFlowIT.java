@@ -28,7 +28,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -39,7 +38,7 @@ import org.testcontainers.kafka.KafkaContainer;
 class TradeStoreFlowIT {
 
     @Autowired
-    private TestRestTemplate rest;
+    private TradeStoreClient rest;
     @Autowired
     private TradePublisher publisher;
     @Autowired
@@ -73,10 +72,10 @@ class TradeStoreFlowIT {
 
     @Test
     void restStoresValidTradeAndAuditsIt() {
-        ResponseEntity<JsonNode> response = rest.postForEntity("/api/v1/trades", body("R1", 1, today.plusDays(5)), JsonNode.class);
+        ResponseEntity<JsonNode> response = rest.post("/api/v1/trades", body("R1", 1, today.plusDays(5)), JsonNode.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(response.getBody().get("expired").asText()).isEqualTo("N");
+        assertThat(response.getBody().get("expired").asString()).isEqualTo("N");
         assertThat(tradeRepository.findById("R1")).isPresent();
         assertThat(auditRepository.findByTradeIdOrderByReceivedAtAsc("R1"))
                 .extracting(e -> e.outcome()).containsExactly(Outcome.ACCEPTED);
@@ -84,26 +83,26 @@ class TradeStoreFlowIT {
 
     @Test
     void restRejectsLowerVersionAndPastMaturityWith422() {
-        rest.postForEntity("/api/v1/trades", body("R2", 2, today.plusDays(5)), JsonNode.class);
+        rest.post("/api/v1/trades", body("R2", 2, today.plusDays(5)), JsonNode.class);
 
-        ResponseEntity<JsonNode> lower = rest.postForEntity("/api/v1/trades", body("R2", 1, today.plusDays(5)), JsonNode.class);
-        ResponseEntity<JsonNode> past = rest.postForEntity("/api/v1/trades", body("R3", 1, today.minusDays(1)), JsonNode.class);
+        ResponseEntity<JsonNode> lower = rest.post("/api/v1/trades", body("R2", 1, today.plusDays(5)), JsonNode.class);
+        ResponseEntity<JsonNode> past = rest.post("/api/v1/trades", body("R3", 1, today.minusDays(1)), JsonNode.class);
 
         assertThat(lower.getStatusCode().value()).isEqualTo(422);
-        assertThat(lower.getBody().get("reason").asText()).isEqualTo("LOWER_VERSION");
+        assertThat(lower.getBody().get("reason").asString()).isEqualTo("LOWER_VERSION");
         assertThat(past.getStatusCode().value()).isEqualTo(422);
-        assertThat(past.getBody().get("reason").asText()).isEqualTo("MATURITY_DATE_IN_PAST");
+        assertThat(past.getBody().get("reason").asString()).isEqualTo("MATURITY_DATE_IN_PAST");
         assertThat(tradeRepository.findById("R3")).isEmpty();
-        assertThat(rest.getForEntity("/api/v1/trades/R2/audit", JsonNode.class).getBody()).hasSize(2);
+        assertThat(rest.get("/api/v1/trades/R2/audit", JsonNode.class).getBody()).hasSize(2);
     }
 
     @Test
     void restRejectsIncompletePayloadWith400() {
-        ResponseEntity<JsonNode> response = rest.postForEntity("/api/v1/trades",
+        ResponseEntity<JsonNode> response = rest.post("/api/v1/trades",
                 Map.of("tradeId", "R4", "bookId", "B1"), JsonNode.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody().get("reason").asText()).isEqualTo("INVALID_PAYLOAD");
+        assertThat(response.getBody().get("reason").asString()).isEqualTo("INVALID_PAYLOAD");
     }
 
     @Test
@@ -115,10 +114,10 @@ class TradeStoreFlowIT {
                         "maturityDate", "20/05/2030"),
                 Map.<String, Object>of("tradeId", "R6", "version", 1, "counterPartyId", "CP-1", "bookId", "B".repeat(65),
                         "maturityDate", "20/05/2030"))) {
-            ResponseEntity<JsonNode> response = rest.postForEntity("/api/v1/trades", body, JsonNode.class);
+            ResponseEntity<JsonNode> response = rest.post("/api/v1/trades", body, JsonNode.class);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(response.getBody().get("reason").asText()).isEqualTo("INVALID_PAYLOAD");
+            assertThat(response.getBody().get("reason").asString()).isEqualTo("INVALID_PAYLOAD");
         }
         assertThat(tradeRepository.findById("R5")).isEmpty();
     }
@@ -133,7 +132,7 @@ class TradeStoreFlowIT {
             publisher.publish(request("K2", 1, today.minusDays(3))).get();
 
             List<JsonNode> rejections = pollRejections(rejected, 2);
-            assertThat(rejections).extracting(n -> n.get("tradeId").asText() + ":" + n.get("reason").asText())
+            assertThat(rejections).extracting(n -> n.get("tradeId").asString() + ":" + n.get("reason").asString())
                     .containsExactlyInAnyOrder("K1:LOWER_VERSION", "K2:MATURITY_DATE_IN_PAST");
             assertThat(tradeRepository.findById("K1")).get().extracting(t -> t.getVersion()).isEqualTo(2);
             assertThat(tradeRepository.findById("K2")).isEmpty();
@@ -142,7 +141,7 @@ class TradeStoreFlowIT {
 
     @Test
     void asyncRestEndpointRoutesThroughKafka() {
-        ResponseEntity<JsonNode> response = rest.postForEntity("/api/v1/trades/async", body("A1", 1, today.plusDays(1)), JsonNode.class);
+        ResponseEntity<JsonNode> response = rest.post("/api/v1/trades/async", body("A1", 1, today.plusDays(1)), JsonNode.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
         await().atMost(Duration.ofSeconds(20)).until(() -> tradeRepository.findById("A1").isPresent());
@@ -203,9 +202,9 @@ class TradeStoreFlowIT {
         Map<String, Object> invalidCreated = Map.of("tradeId", "DR2", "version", 1, "counterPartyId", "CP-1",
                 "bookId", "B1", "maturityDate", "20/05/2030", "createdDate", "31/02/2030");
 
-        assertThat(rest.postForEntity("/api/v1/trades", invalidMaturity, JsonNode.class).getStatusCode())
+        assertThat(rest.post("/api/v1/trades", invalidMaturity, JsonNode.class).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(rest.postForEntity("/api/v1/trades", invalidCreated, JsonNode.class).getStatusCode())
+        assertThat(rest.post("/api/v1/trades", invalidCreated, JsonNode.class).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(auditRepository.findByTradeIdOrderByReceivedAtAsc("DR1")).isEmpty();
         assertThat(auditRepository.findByTradeIdOrderByReceivedAtAsc("DR2")).isEmpty();
@@ -219,7 +218,7 @@ class TradeStoreFlowIT {
                     "bookId", "B1", "maturityDate", wireDate(today.plusDays(5)),
                     "createdDate", INVALID_CREATED_DATES.get(i));
 
-            ResponseEntity<JsonNode> response = rest.postForEntity("/api/v1/trades", payload, JsonNode.class);
+            ResponseEntity<JsonNode> response = rest.post("/api/v1/trades", payload, JsonNode.class);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(tradeRepository.findById(id)).isEmpty();
@@ -236,10 +235,10 @@ class TradeStoreFlowIT {
             Map<String, Object> payload = Map.of("tradeId", id, "version", 1, "counterPartyId", "CP-1",
                     "bookId", "B1", "maturityDate", wireDate(today.plusDays(5)), "createdDate", createdDate);
 
-            ResponseEntity<JsonNode> response = rest.postForEntity("/api/v1/trades", payload, JsonNode.class);
+            ResponseEntity<JsonNode> response = rest.post("/api/v1/trades", payload, JsonNode.class);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-            assertThat(response.getBody().get("createdDate").asText()).isEqualTo(createdDate);
+            assertThat(response.getBody().get("createdDate").asString()).isEqualTo(createdDate);
             assertThat(tradeRepository.findById(id)).isPresent();
         }
     }
@@ -272,15 +271,15 @@ class TradeStoreFlowIT {
 
     @Test
     void expiryRunMarksMaturedTradesAsExpired() {
-        rest.postForEntity("/api/v1/trades", body("E1", 1, today.plusDays(1)), JsonNode.class);
-        rest.postForEntity("/api/v1/trades", body("E2", 1, today.plusDays(10)), JsonNode.class);
+        rest.post("/api/v1/trades", body("E1", 1, today.plusDays(1)), JsonNode.class);
+        rest.post("/api/v1/trades", body("E2", 1, today.plusDays(10)), JsonNode.class);
 
         clock.setToday(today.plusDays(2));
-        ResponseEntity<JsonNode> run = rest.postForEntity("/api/v1/trades/expiry-run", null, JsonNode.class);
+        ResponseEntity<JsonNode> run = rest.post("/api/v1/trades/expiry-run", null, JsonNode.class);
 
         assertThat(run.getBody().get("expired").asInt()).isEqualTo(1);
-        assertThat(rest.getForObject("/api/v1/trades/E1", JsonNode.class).get("expired").asText()).isEqualTo("Y");
-        assertThat(rest.getForObject("/api/v1/trades/E2", JsonNode.class).get("expired").asText()).isEqualTo("N");
+        assertThat(rest.getBody("/api/v1/trades/E1", JsonNode.class).get("expired").asString()).isEqualTo("Y");
+        assertThat(rest.getBody("/api/v1/trades/E2", JsonNode.class).get("expired").asString()).isEqualTo("N");
     }
 
     /** Documents assumption A14: the message has no event id, so a replay of an equal version wins. */
@@ -303,10 +302,10 @@ class TradeStoreFlowIT {
 
     @Test
     void exposesHealthAndPrometheusMetrics() {
-        rest.postForEntity("/api/v1/trades", body("M1", 1, today.plusDays(1)), JsonNode.class);
+        rest.post("/api/v1/trades", body("M1", 1, today.plusDays(1)), JsonNode.class);
 
-        assertThat(rest.getForEntity("/actuator/health", String.class).getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(rest.getForObject("/actuator/prometheus", String.class)).contains("tradestore_trades_received_total");
+        assertThat(rest.get("/actuator/health", String.class).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(rest.getBody("/actuator/prometheus", String.class)).contains("tradestore_trades_received_total");
     }
 
     private Consumer<String, String> rejectedTopicConsumer() {

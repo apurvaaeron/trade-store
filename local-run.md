@@ -265,8 +265,8 @@ Needs JDK 17, Maven 3.9.x and Docker running (integration tests start their own 
 
 | What | Command | Tests | HTML report |
 |---|---|---|---|
-| Unit + web-slice tests (JUnit, Mockito, MockMvc; no Docker) | `mvn test` | 57 | `target/reports/surefire.html` (after the report step below) |
-| Everything: unit, integration, Cucumber acceptance, concurrency, performance smoke, coverage gate | `mvn verify` | 57 + 31 | `target/reports/surefire.html`, `target/reports/failsafe.html`, `target/cucumber-report.html`, `target/site/jacoco/index.html` |
+| Unit + web-slice tests (JUnit, Mockito, MockMvc; no Docker) | `mvn test` | 58 | `target/reports/surefire.html` (after the report step below) |
+| Everything: unit, integration, Cucumber acceptance, concurrency, performance smoke, coverage gate | `mvn verify` | 58 + 31 | `target/reports/surefire.html`, `target/reports/failsafe.html`, `target/cucumber-report.html`, `target/site/jacoco/index.html` |
 | Mutation testing (PIT, gate ≥ 70%) | `mvn test-compile org.pitest:pitest-maven:mutationCoverage` | – | `target/pit-reports/index.html` |
 
 ```powershell
