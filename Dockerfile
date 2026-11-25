@@ -5,7 +5,7 @@ RUN mvn -B -ntp dependency:go-offline
 COPY src ./src
 RUN mvn -B -ntp package -DskipTests -Djacoco.skip=true
 
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 RUN addgroup -S app && adduser -S app -G app && apk add --no-cache curl
 WORKDIR /app
 COPY --from=build /workspace/target/trade-store-*.jar app.jar
