@@ -24,7 +24,7 @@ jobs:
       security-events: write
       actions: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # build-mode none analyses the Java sources without a Maven build, so it does not depend on Maven Central.
       - uses: github/codeql-action/init@v4
         with:
