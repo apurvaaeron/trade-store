@@ -4,15 +4,23 @@ import com.tradestore.domain.RejectionReason;
 import com.tradestore.domain.TradeNotFoundException;
 import com.tradestore.domain.TradeRejectedException;
 import com.tradestore.messaging.TradePublishException;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+/** Maps domain and messaging failures to RFC 9457 problem responses. */
 @RestControllerAdvice
 public class ApiExceptionHandler {
+
+    /** Problem extension members; part of the public API contract. */
+    private static final String TRADE_ID = "tradeId";
+    private static final String REASON = "reason";
+    private static final String OUTCOME = "outcome";
+
+    private static final String RETRY_AFTER_SECONDS = "1";
 
     /** 400 for malformed payloads, 422 for well-formed trades that break a business rule. */
     @ExceptionHandler(TradeRejectedException.class)
@@ -20,10 +28,8 @@ public class ApiExceptionHandler {
         HttpStatus status = e.getReason() == RejectionReason.INVALID_PAYLOAD
                 ? HttpStatus.BAD_REQUEST
                 : HttpStatus.UNPROCESSABLE_CONTENT;
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, e.getMessage());
-        problem.setTitle("Trade rejected");
-        problem.setProperty("tradeId", e.getTradeId());
-        problem.setProperty("reason", e.getReason());
+        ProblemDetail problem = tradeProblem(status, "Trade rejected", e.getMessage(), e.getTradeId());
+        problem.setProperty(REASON, e.getReason());
         return problem;
     }
 
@@ -39,11 +45,20 @@ public class ApiExceptionHandler {
      */
     @ExceptionHandler(TradePublishException.class)
     public ResponseEntity<ProblemDetail> publishNotConfirmed(TradePublishException e) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, e.getMessage());
-        problem.setTitle(e.getOutcome() == TradePublishException.Outcome.UNKNOWN
-                ? "Publish outcome unknown" : "Publish failed");
-        problem.setProperty("tradeId", e.getTradeId());
-        problem.setProperty("outcome", e.getOutcome());
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).header(HttpHeaders.RETRY_AFTER, "1").body(problem);
+        String title = e.getOutcome() == TradePublishException.Outcome.UNKNOWN
+                ? "Publish outcome unknown"
+                : "Publish failed";
+        ProblemDetail problem = tradeProblem(HttpStatus.SERVICE_UNAVAILABLE, title, e.getMessage(), e.getTradeId());
+        problem.setProperty(OUTCOME, e.getOutcome());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS)
+                .body(problem);
+    }
+
+    private static ProblemDetail tradeProblem(HttpStatus status, String title, String detail, String tradeId) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
+        problem.setTitle(title);
+        problem.setProperty(TRADE_ID, tradeId);
+        return problem;
     }
 }
