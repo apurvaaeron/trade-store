@@ -181,3 +181,25 @@ tests from `TestRestTemplate` to `RestTestClient`, and updated the implementatio
 
 Devin added the CodeQL workflow, the dependency review job, Trivy SARIF upload, the token-gated SonarCloud CI analysis with
 coverage, and fixed the one SonarCloud bug (a test comparing a `Trade` with a `String`).
+
+**Prompt 26** (repeated string literals)
+
+> In the ApiExceptionHandler line number 25-26 why do we have jardcoded property names they are repeating
+
+> Please do the clean up and code must look highly professional and maintainable
+
+> Are we sure there are no other string literal in code hardcoded?
+
+Devin defined the problem property names, wire formats, metric names and tags and the API base path once
+(`TradeFormats`, `TradeMetrics`, constants), and replaced the map response bodies with records.
+
+**Prompt 27** (GCP deployment)
+
+> Lets deploy this on GCP, would we use terraform or something else to deploy this, what would be the cost?
+
+> I need only for today, inclined towards B to show full scale deployment, what would be the cost isn't there a free tier in DCP?
+
+> Create a terraform script as well
+
+Devin wrote `infra/terraform` (Cloud Run, private Cloud SQL, Confluent Cloud Kafka, MongoDB Atlas, Secret Manager),
+ADR-0005, and a CI job that formats and validates it. The configuration was not applied.

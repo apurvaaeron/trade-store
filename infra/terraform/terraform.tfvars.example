@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars (git-ignored) and fill in.
+project_id   = "my-gcp-project"
+atlas_org_id = "0123456789abcdef01234567"
+
+# Immutable image tag, e.g. the output of `git rev-parse --short HEAD`. Change it here, not with -var, to roll out.
+image_tag = "0123abc"
+
+# Demo settings: public API, open Atlas access list, and resources that terraform destroy can delete.
+allow_unauthenticated = true
+deletion_protection   = false
+atlas_access_cidrs    = ["0.0.0.0/0"]

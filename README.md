@@ -18,6 +18,7 @@ audit log), Flyway, Micrometer/Prometheus, JUnit 6 + Testcontainers + Cucumber, 
 | [docs/DESIGN-PRINCIPLES.md](docs/DESIGN-PRINCIPLES.md) | Concise design principles behind the code and architecture |
 | [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) | Full build prompt for recreating the solution with a local coding agent |
 | [docs/adr/](docs/adr) | Architecture decision records |
+| [infra/terraform/](infra/terraform) | GCP deployment as code: Cloud Run, Cloud SQL, Confluent Cloud Kafka, MongoDB Atlas |
 | [AI_PROMPTS.md](AI_PROMPTS.md) | AI usage disclosure and all prompts, as the brief requests |
 | [local-run.md](local-run.md) | Feature-branch checkout, local Docker Compose setup, API examples and cleanup |
 
@@ -119,6 +120,7 @@ mvn test-compile org.pitest:pitest-maven:mutationCoverage   # mutation testing (
 | `dependency-review` (PRs only) | The PR adds or upgrades to a dependency with a known high or critical CVE |
 | `docker-image` | Trivy finds a high or critical vulnerability in the image; pushes to GHCR on `main` |
 | `smoke-test` | The composed stack does not start or the API does not behave |
+| `terraform` | `infra/terraform` is not formatted or does not validate |
 | `CodeQL` (`codeql.yml`) | CodeQL `security-extended` static analysis (SAST) of the Java code finds an alert; also runs weekly |
 
 Trivy JAR findings are also uploaded as SARIF, so CVEs appear in the repository's Security tab next to CodeQL alerts.
@@ -134,5 +136,10 @@ To block merging, mark the checks as required in a `main` branch protection rule
 ## Deployment
 
 GitHub builds, tests, scans and publishes the image (`ghcr.io/<owner>/trade-store`); it does not host a running
-JVM service. The image runs on any container platform, for example Google Cloud Run with Confluent Cloud (Kafka),
-Cloud SQL (PostgreSQL) and MongoDB Atlas, configured through the environment variables above.
+JVM service.
+
+[`infra/terraform`](infra/terraform) deploys the image to Google Cloud. It uses Cloud Run, Cloud SQL PostgreSQL on a
+private IP, Confluent Cloud Kafka, MongoDB Atlas and Secret Manager, configured through the environment variables
+above with no code changes. Its README covers the steps, a cost estimate, and demo versus production settings
+([ADR-0005](docs/adr/0005-gcp-deployment-terraform.md)). The configuration is validated in CI but not applied
+automatically.
