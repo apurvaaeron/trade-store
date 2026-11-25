@@ -18,6 +18,9 @@ push** and blocks the merge if it fails.
 | Coverage gate | JaCoCo (unit + IT merged) | ≥ 85% line coverage or the build fails | `pom.xml` | `mvn verify` |
 | Mutation | PIT | Tests actually fail when the code is wrong (≥ 70% mutants killed) | `pom.xml` | CI job `mutation-tests` |
 | OSS vulnerabilities | Trivy on the built JAR; optional OWASP Dependency-Check | Fails on HIGH or CRITICAL (Trivy); CVSS ≥ 9 when Dependency-Check runs | CI job `oss-vulnerability-scan` | CI |
+| New dependencies | GitHub dependency review | A PR cannot add or upgrade to a dependency with a HIGH or CRITICAL advisory | CI job `dependency-review` | CI (PRs) |
+| Static analysis (SAST) | CodeQL `security-extended` | No security alerts in the Java code (injection, unsafe deserialization, log forging, ...) | `.github/workflows/codeql.yml` | CI + weekly |
+| Code quality | SonarCloud quality gate | No new bugs, vulnerabilities or hotspots; coverage and duplication on new code within the gate | CI job `build-and-test` (needs `SONAR_TOKEN`) | CI |
 | Container | Trivy image scan | No high or critical vulnerabilities in the runtime image | CI job `docker-image` | CI |
 | Smoke (deployed stack) | `docker compose` + curl | The built image starts with real dependencies and serves the API | CI job `smoke-test` | CI |
 

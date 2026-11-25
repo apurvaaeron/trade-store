@@ -109,18 +109,27 @@ mvn test-compile org.pitest:pitest-maven:mutationCoverage   # mutation testing (
 
 ## CI/CD (GitHub Actions)
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every pull request and push:
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) and [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) run on every pull request and push:
 
 | Job | Fails the build when |
 |---|---|
-| `build-and-test` | Any unit, integration or acceptance test fails, or line coverage < 85% |
+| `build-and-test` | Any unit, integration or acceptance test fails, or line coverage < 85%; with `SONAR_TOKEN` set, the SonarCloud quality gate fails (analysis includes JaCoCo coverage) |
 | `mutation-tests` | Mutation score < 70% |
 | `oss-vulnerability-scan` | Trivy finds a **high or critical** vulnerability in the built JAR (the brief's "blocker" is mapped to HIGH and CRITICAL). OWASP Dependency-Check is optional: it runs only when the `NVD_API_KEY` secret is set (CVSS ≥ 9 fails) and is reported as SKIPPED in the job summary otherwise |
+| `dependency-review` (PRs only) | The PR adds or upgrades to a dependency with a known high or critical CVE |
 | `docker-image` | Trivy finds a high or critical vulnerability in the image; pushes to GHCR on `main` |
 | `smoke-test` | The composed stack does not start or the API does not behave |
+| `CodeQL` (`codeql.yml`) | CodeQL `security-extended` static analysis (SAST) of the Java code finds an alert; also runs weekly |
+
+Trivy JAR findings are also uploaded as SARIF, so CVEs appear in the repository's Security tab next to CodeQL alerts.
 
 Trivy is the enforced gate. To enable the optional OWASP Dependency-Check, add a free NVD API key (https://nvd.nist.gov/developers/request-an-api-key) as the
 repository secret `NVD_API_KEY`.
+
+SonarCloud: without a token, SonarCloud Automatic Analysis (if enabled) reports on each PR without coverage. For the CI analysis
+with coverage and a blocking quality gate, create a token in SonarCloud (My Account → Security), add it as the repository secret
+`SONAR_TOKEN`, and turn off Automatic Analysis (SonarCloud project → Administration → Analysis Method); the two modes cannot run together.
+To block merging, mark the checks as required in a `main` branch protection rule.
 
 ## Deployment
 

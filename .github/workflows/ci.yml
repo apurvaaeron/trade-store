@@ -21,8 +21,12 @@ jobs:
   build-and-test:
     name: Build, unit + integration + acceptance tests, coverage gate
     runs-on: ubuntu-latest
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # SonarCloud needs full history to detect new code
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -47,6 +51,15 @@ jobs:
           if [ -f target/site/jacoco/jacoco.csv ]; then
             awk -F, 'NR>1 {m+=$8; c+=$9} END {printf "### Line coverage: %.1f%%\n", 100*c/(m+c)}' target/site/jacoco/jacoco.csv >> "$GITHUB_STEP_SUMMARY"
           fi
+      # Reuses the compiled classes and JaCoCo XML from mvn verify. Turn off SonarCloud Automatic Analysis when adding the token.
+      - name: SonarCloud analysis with coverage (quality gate fails the build; needs SONAR_TOKEN)
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            echo "::warning::SONAR_TOKEN secret not set; CI SonarCloud analysis SKIPPED."
+            echo "### SonarCloud CI analysis: SKIPPED (no SONAR_TOKEN secret)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          mvn -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.qualitygate.wait=true
 
   mutation-tests:
     name: Mutation tests (PIT, threshold 70%)
@@ -92,6 +105,22 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: '1'
           format: table
+      - name: Trivy JAR scan as SARIF (CVE findings in the Security tab and on the PR)
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: rootfs
+          scan-ref: target
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          format: sarif
+          output: trivy-jar.sarif
+      - name: Upload Trivy SARIF to GitHub code scanning
+        if: always() && hashFiles('trivy-jar.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-jar.sarif
+          category: trivy-jar
       - name: Restore NVD database cache
         uses: actions/cache@v4
         with:
@@ -115,6 +144,20 @@ jobs:
           name: owasp-dependency-check
           path: target/dependency-check-report.*
           if-no-files-found: ignore
+
+  dependency-review:
+    name: Dependency review (blocks PRs adding HIGH/CRITICAL CVEs)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4.9.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
 
   docker-image:
     name: Container image (build, scan, push on main)

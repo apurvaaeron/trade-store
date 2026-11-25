@@ -156,3 +156,28 @@ Devin wrote [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) from the 
 > Yes do that and give me the email content
 
 Devin drafted the submission email, added the plan to `docs/` and linked it from this file and the README.
+
+**Prompt 23** (Codespaces)
+
+> Give me full steps to run it on codespaces
+
+Codespaces failed to build the dev container. Devin found an expired Yarn apt signing key in the base image and replaced the
+Maven feature with a checksum-verified Maven install in `.devcontainer/Dockerfile`.
+
+**Prompt 24** (deprecated APIs)
+
+> I see these code quality errors in intellij - Code maturity ... (IntelliJ list of deprecated API usages)
+
+> Fix all, including the TestRestTemplate migration, and update the plan
+
+Devin replaced `HttpStatus.UNPROCESSABLE_ENTITY`, `isUnprocessableEntity()` and Jackson `asText()`, migrated the integration
+tests from `TestRestTemplate` to `RestTestClient`, and updated the implementation plan.
+
+**Prompt 25** (PR security scans)
+
+> I also want to add CVE and sonar scan during pull request
+
+> Also CodeQL
+
+Devin added the CodeQL workflow, the dependency review job, Trivy SARIF upload, the token-gated SonarCloud CI analysis with
+coverage, and fixed the one SonarCloud bug (a test comparing a `Trade` with a `String`).
