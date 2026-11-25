@@ -4,16 +4,21 @@ title CI/CD pipeline (GitHub Actions)
 left to right direction
 
 rectangle "PR / push" as trigger
-rectangle "build-and-test\nunit (JUnit 5) -> integration (Testcontainers)\n-> acceptance (Cucumber) -> JaCoCo >= 85%" as build
+rectangle "build-and-test\nunit (JUnit 5) -> integration (Testcontainers)\n-> acceptance (Cucumber) -> JaCoCo >= 85%\n-> SonarCloud quality gate (with SONAR_TOKEN)" as build
 rectangle "mutation-tests\nPIT >= 70%" as pit
-rectangle "oss-vulnerability-scan\nTrivy fs (CRITICAL = fail)\nOWASP Dependency-Check (CVSS >= 9 = fail)" as scan
-rectangle "docker-image\nbuild -> Trivy image scan -> push GHCR (main)" as image
+rectangle "oss-vulnerability-scan\nTrivy JAR scan (HIGH/CRITICAL = fail, SARIF to Security tab)\nOWASP Dependency-Check (optional, CVSS >= 9 = fail)" as scan
+rectangle "dependency-review (PRs)\nnew HIGH/CRITICAL CVE = fail" as depreview
+rectangle "CodeQL (codeql.yml)\nJava SAST, security-extended" as codeql
+rectangle "docker-image\nbuild -> Trivy image scan (HIGH/CRITICAL = fail) -> push GHCR (main)" as image
 rectangle "smoke-test\ndocker compose up -> REST calls" as smoke
 
 trigger --> build
 trigger --> pit
 trigger --> scan
+trigger --> depreview
+trigger --> codeql
 build --> image
+pit --> image
 scan --> image
 image --> smoke
 @enduml

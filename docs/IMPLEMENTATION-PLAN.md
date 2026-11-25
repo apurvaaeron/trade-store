@@ -62,7 +62,7 @@ Rules:
 | Error format | RFC 9457 `ProblemDetail`; 400 = malformed/invalid payload, 422 = business-rule rejection |
 | Observability | Actuator health with liveness/readiness probes, Prometheus metrics, sanitised logs |
 | Packaging | Multi-stage Dockerfile, non-root runtime user; `docker compose up` runs the whole stack |
-| Security gate | Trivy on the **built JAR** and the **image**, failing on HIGH or CRITICAL ("blocker" = HIGH) |
+| Security gate | Trivy on the **built JAR** and the **image**, failing on HIGH or CRITICAL ("blocker" = HIGH); dependency review, CodeQL and SonarCloud on PRs |
 
 Known, accepted limitation (document it, do not "fix" it): delivery is at-least-once and a same-version replay
 can overwrite a later same-version correction, because equal versions replace and the message has no event id
@@ -398,16 +398,27 @@ Also add `.devcontainer/devcontainer.json` (Java 17 + Maven + docker-in-docker),
 
 Triggers: push to `main`, pull requests, manual. `permissions: contents: read`; concurrency cancels stale runs.
 Jobs (Temurin 17, Maven cache):
-1. `build-and-test`: `mvn -B -ntp verify`; upload surefire/failsafe/JaCoCo/Cucumber reports; line coverage in the step summary.
+1. `build-and-test` (checkout with `fetch-depth: 0`): `mvn -B -ntp verify`; upload surefire/failsafe/JaCoCo/Cucumber reports;
+   line coverage in the step summary. Then, only when the `SONAR_TOKEN` secret exists,
+   `mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.qualitygate.wait=true` (plugin pinned in
+   `pluginManagement`; `sonar.organization`, `sonar.projectKey`, `sonar.host.url=https://sonarcloud.io` and
+   `sonar.coverage.jacoco.xmlReportPaths` set as pom properties); otherwise warn and write "SKIPPED" to the step summary.
+   SonarCloud Automatic Analysis must be off when the token is used.
 2. `mutation-tests`: PIT; upload `target/pit-reports`.
 3. `oss-vulnerability-scan` ("fails on high/critical"): `mvn package -DskipTests -Djacoco.skip=true`, then
    `aquasecurity/trivy-action` `scan-type: rootfs`, `scan-ref: target`, `severity: HIGH,CRITICAL`, `exit-code: 1`.
-   Scan the JAR, not `pom.xml` (a pom scan cannot resolve Spring Boot-managed or transitive versions).
+   Scan the JAR, not `pom.xml` (a pom scan cannot resolve Spring Boot-managed or transitive versions). Repeat the scan
+   with `format: sarif` and upload it with `github/codeql-action/upload-sarif` (category `trivy-jar`) so CVEs show in the
+   Security tab.
    Then optional OWASP Dependency-Check (`mvn -Powasp verify -DskipTests`) only when the `NVD_API_KEY` secret exists;
    otherwise emit a warning **and write "SKIPPED" to `$GITHUB_STEP_SUMMARY`**. Upload the report.
-4. `docker-image` (needs 1-3): build image, Trivy image scan `HIGH,CRITICAL` exit 1, push to GHCR only on `main`.
-5. `smoke-test` (needs 4): compose up, POST a valid trade and GET it (`"expired":"N"`), POST a past-maturity trade and
+4. `dependency-review` (pull requests only): `actions/dependency-review-action` with `fail-on-severity: high`.
+5. `docker-image` (needs 1-3): build image, Trivy image scan `HIGH,CRITICAL` exit 1, push to GHCR only on `main`.
+6. `smoke-test` (needs 5): compose up, POST a valid trade and GET it (`"expired":"N"`), POST a past-maturity trade and
    expect `422`, logs on failure, `docker compose down -v`.
+
+`.github/workflows/codeql.yml`: push to `main`, pull requests, weekly and manual; `github/codeql-action` v4,
+`languages: java-kotlin`, `build-mode: none`, `queries: security-extended`, `security-events: write`.
 
 ## 13. Load test, Postman and docs
 

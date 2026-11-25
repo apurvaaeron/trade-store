@@ -25,7 +25,7 @@ class TradeTest {
                 .isNotEqualTo(new Trade("T1", 1, "CP-1", "B1", TODAY.plusDays(1), TODAY, false))
                 .isNotEqualTo(new Trade("T1", 1, "CP-1", "B1", TODAY, TODAY.plusDays(1), false))
                 .isNotEqualTo(new Trade("T1", 1, "CP-1", "B1", TODAY, TODAY, true))
-                .isNotEqualTo("T1");
+                .isNotEqualTo(new Object());
     }
 
     @Test

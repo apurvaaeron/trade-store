@@ -28,6 +28,11 @@
         <coverage.line.minimum>0.85</coverage.line.minimum>
         <mutation.threshold>70</mutation.threshold>
         <owasp.failBuildOnCVSS>9</owasp.failBuildOnCVSS>
+        <sonar-maven-plugin.version>5.9.0.7382</sonar-maven-plugin.version>
+        <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+        <sonar.organization>apurvaaeron</sonar.organization>
+        <sonar.projectKey>apurvaaeron_trade-store</sonar.projectKey>
+        <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
     </properties>
 
     <dependencyManagement>
@@ -191,6 +196,15 @@
     </dependencies>
 
     <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.sonarsource.scanner.maven</groupId>
+                    <artifactId>sonar-maven-plugin</artifactId>
+                    <version>${sonar-maven-plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
