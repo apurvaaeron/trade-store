@@ -8,5 +8,6 @@ resource "google_artifact_registry_repository" "images" {
 }
 
 locals {
-  image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.images.repository_id}/trade-store:${var.image_tag}"
+  image_repository = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.images.repository_id}"
+  image            = "${local.image_repository}/trade-store:${var.image_tag}"
 }

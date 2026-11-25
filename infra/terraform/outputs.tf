@@ -8,8 +8,13 @@ output "swagger_url" {
   value       = "${google_cloud_run_v2_service.app.uri}/swagger-ui.html"
 }
 
+output "image_repository" {
+  description = "Artifact Registry path that images are pushed to."
+  value       = local.image_repository
+}
+
 output "image" {
-  description = "Image reference Cloud Run deploys; push the build here before the full apply."
+  description = "Image reference Cloud Run deploys (as of the last apply)."
   value       = local.image
 }
 

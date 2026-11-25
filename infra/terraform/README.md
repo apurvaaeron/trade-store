@@ -55,8 +55,10 @@ terraform init
 # 1. Create the image repository first; Cloud Run cannot start without an image.
 terraform apply -target=google_artifact_registry_repository.images
 
-# 2. Build the image and push it with your own credentials (no Cloud Build service account involved).
-IMAGE=$(terraform output -raw image)
+# 2. Build the image for the tag in terraform.tfvars and push it with your own credentials.
+#    The tag is read from the tfvars file, not from state, so a new tag is pushed before the apply that deploys it.
+TAG=$(echo 'var.image_tag' | terraform console | tr -d '"')
+IMAGE="$(terraform output -raw image_repository)/trade-store:$TAG"
 gcloud auth configure-docker "${IMAGE%%/*}" --quiet
 docker build -t "$IMAGE" ../.. && docker push "$IMAGE"
 
